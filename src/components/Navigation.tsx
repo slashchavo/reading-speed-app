@@ -1,10 +1,11 @@
-import type { Route } from '../lib/useHashRoute';
+import { navSection, type Route } from '../lib/useHashRoute';
 import { RouteLink } from './RouteLink';
 
 const ITEMS: { route: Route; label: string }[] = [
   { route: 'home', label: 'Главная' },
-  { route: 'schulte', label: 'Шульте' },
+  { route: 'trainings', label: 'Тренировки' },
   { route: 'reading', label: 'Чтение' },
+  { route: 'books', label: 'Книги' },
   { route: 'progress', label: 'Прогресс' },
 ];
 
@@ -18,7 +19,7 @@ export function Navigation({ current }: NavigationProps) {
       <ul className="nav__list">
         {ITEMS.map((item) => (
           <li key={item.route}>
-            <RouteLink className="nav__link" to={item.route} current={item.route === current}>
+            <RouteLink className="nav__link" to={item.route} current={item.route === navSection(current)}>
               {item.label}
             </RouteLink>
           </li>

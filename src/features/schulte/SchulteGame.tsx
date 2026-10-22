@@ -3,16 +3,19 @@ import { SaveStatus, type SaveState } from '../../components/SaveStatus';
 import { formatDuration, formatStopwatch } from '../../lib/dateUtils';
 import { createId } from '../../lib/storage';
 import { useStopwatch } from '../../lib/useStopwatch';
-import type { GridSize, SchulteMode, SchulteSession } from '../../types/session';
-import { createGrid, createSequence, gridLabel, modeLabel } from './schulteUtils';
+import type { ColorMode, GridSize, SchulteMode, SchulteSession } from '../../types/session';
+import { shuffle } from '../../lib/random';
+import { assignColors, colorModeLabel, createSequence, gridLabel, modeLabel, orderHint } from './schulteUtils';
 
 type Phase = 'setup' | 'playing' | 'finished';
 
 type SchulteGameProps = {
   gridSize: GridSize;
   mode: SchulteMode;
+  colorMode: ColorMode;
   onGridSizeChange: (size: GridSize) => void;
   onModeChange: (mode: SchulteMode) => void;
+  onColorModeChange: (colorMode: ColorMode) => void;
   onComplete: (session: SchulteSession) => boolean;
 };
 
@@ -21,9 +24,24 @@ type Result = {
   mistakes: number;
 };
 
-export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, onComplete }: SchulteGameProps) {
+const MODES: { value: SchulteMode; label: string }[] = [
+  { value: 'numbers', label: 'Числа' },
+  { value: 'letters', label: 'Латиница' },
+  { value: 'cyrillic', label: 'Кириллица' },
+];
+
+export function SchulteGame({
+  gridSize,
+  mode,
+  colorMode,
+  onGridSizeChange,
+  onModeChange,
+  onColorModeChange,
+  onComplete,
+}: SchulteGameProps) {
   const [phase, setPhase] = useState<Phase>('setup');
   const [grid, setGrid] = useState<string[]>([]);
+  const [colors, setColors] = useState<(string | null)[]>([]);
   const [sequence, setSequence] = useState<string[]>([]);
   const [nextIndex, setNextIndex] = useState(0);
   const [mistakes, setMistakes] = useState(0);
@@ -47,8 +65,10 @@ export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, on
   }, [phase]);
 
   const start = () => {
-    setSequence(createSequence(gridSize, mode));
-    setGrid(createGrid(gridSize, mode));
+    const nextSequence = createSequence(gridSize, mode);
+    setSequence(nextSequence);
+    setGrid(shuffle(nextSequence));
+    setColors(assignColors(nextSequence.length, colorMode));
     setNextIndex(0);
     setMistakes(0);
     setWrongCell(null);
@@ -99,6 +119,7 @@ export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, on
       gridSize,
       mode,
       mistakes,
+      colorMode,
     });
     setSaveState(saved ? 'saved' : 'failed');
   };
@@ -129,24 +150,39 @@ export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, on
         <fieldset className="choice">
           <legend className="choice__legend">Содержимое</legend>
           <div className="segmented">
-            {(['numbers', 'letters'] as const).map((value) => (
-              <label key={value} className="segmented__option">
+            {MODES.map((item) => (
+              <label key={item.value} className="segmented__option">
                 <input
                   type="radio"
                   name="grid-mode"
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => onModeChange(value)}
+                  value={item.value}
+                  checked={mode === item.value}
+                  onChange={() => onModeChange(item.value)}
                 />
-                <span>{value === 'numbers' ? 'Числа' : 'Буквы'}</span>
+                <span>{item.label}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset className="choice">
+          <legend className="choice__legend">Цвет символов</legend>
+          <div className="segmented">
+            {(['mono', 'color'] as const).map((value) => (
+              <label key={value} className="segmented__option">
+                <input
+                  type="radio"
+                  name="grid-color"
+                  value={value}
+                  checked={colorMode === value}
+                  onChange={() => onColorModeChange(value)}
+                />
+                <span>{value === 'mono' ? 'Чёрно-белый' : 'Цветной'}</span>
               </label>
             ))}
           </div>
         </fieldset>
         <p className="muted">
-          {mode === 'numbers'
-            ? `Нажимайте числа по порядку: от 1 до ${gridSize * gridSize}.`
-            : `Нажимайте буквы по порядку: ${gridSize === 5 ? 'A … Y' : 'A … Z, затем AA … AW'}.`}{' '}
+          {orderHint(gridSize, mode)}{' '}
           Старайтесь смотреть в центр таблицы и находить элементы периферическим зрением.
         </p>
         <button type="button" className="button button--primary button--large" onClick={start}>
@@ -174,7 +210,7 @@ export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, on
           <div className="stat">
             <dt className="stat__label">Таблица</dt>
             <dd className="stat__value">
-              {gridLabel(gridSize)}, {modeLabel(mode)}
+              {gridLabel(gridSize)}, {modeLabel(mode)}, {colorModeLabel(colorMode)}
             </dd>
           </div>
         </dl>
@@ -218,11 +254,14 @@ export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, on
         {wrongCell ? `Ошибка: ${wrongCell}. Нужно найти ${target}.` : ''}
       </p>
       <div className={`schulte__grid schulte__grid--${gridSize}`} role="group" aria-label="Таблица">
-        {grid.map((value) => {
+        {grid.map((value, position) => {
+          const color = colors[position] ?? null;
           const index = sequence.indexOf(value);
           const found = index < nextIndex;
           const wrong = wrongCell === value;
-          const className = ['cell', found ? 'cell--found' : '', wrong ? 'cell--wrong' : ''].join(' ').trim();
+          const className = ['cell', found ? 'cell--found' : '', wrong ? 'cell--wrong' : '', value.length > 1 ? 'cell--pair' : '']
+            .join(' ')
+            .trim();
           return (
             <button
               key={value}
@@ -231,6 +270,7 @@ export function SchulteGame({ gridSize, mode, onGridSizeChange, onModeChange, on
               onClick={() => handleCellClick(value)}
               aria-label={found ? `${value}, найдено` : value}
               aria-disabled={found || undefined}
+              style={color && !found && !wrong ? { color } : undefined}
             >
               {value}
               {wrong && (

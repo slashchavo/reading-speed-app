@@ -17,6 +17,8 @@ export function SchultePage({ settings, onSettingsChange, onComplete }: SchulteP
       <SchulteGame
         gridSize={settings.schulteGridSize}
         mode={settings.schulteMode}
+        colorMode={settings.schulteColorMode}
+        onColorModeChange={(schulteColorMode) => onSettingsChange({ schulteColorMode })}
         onGridSizeChange={(schulteGridSize) => onSettingsChange({ schulteGridSize })}
         onModeChange={(schulteMode) => onSettingsChange({ schulteMode })}
         onComplete={onComplete}

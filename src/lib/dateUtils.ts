@@ -32,3 +32,27 @@ export function formatStopwatch(milliseconds: number): string {
   const fraction = tenths % 10;
   return `${minutes}:${String(seconds).padStart(2, '0')},${fraction}`;
 }
+
+/** Локальная дата устройства в формате YYYY-MM-DD. */
+export function localDateString(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Часы обратного/прямого отсчёта: «02:05» (или «1:02:05» дольше часа). */
+export function formatClock(milliseconds: number): string {
+  const totalSeconds = Number.isFinite(milliseconds) && milliseconds > 0 ? Math.floor(milliseconds / 1000) : 0;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/** Округление длительности до десятых секунды для истории. */
+export function roundSeconds(milliseconds: number): number {
+  return Number.isFinite(milliseconds) && milliseconds > 0 ? Math.round(milliseconds / 100) / 10 : 0;
+}
