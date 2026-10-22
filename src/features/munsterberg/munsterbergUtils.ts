@@ -1,7 +1,7 @@
 import { normalizeWord } from '../../lib/answers';
 import { randomInt, sample, type RandomFn } from '../../lib/random';
 import type { MunsterbergLevel } from '../../types/session';
-import { COMMON_WORDS, EASY_WORDS } from '../words/dictionary';
+import { COMMON_WORDS, EASY_LONG_WORDS, EASY_WORDS } from '../words/dictionary';
 
 export const MUNSTERBERG_LEVELS: Record<MunsterbergLevel, { label: string; rows: number; words: number }> = {
   easy: { label: 'Лёгкий', rows: 30, words: 5 },
@@ -10,9 +10,15 @@ export const MUNSTERBERG_LEVELS: Record<MunsterbergLevel, { label: string; rows:
   expert: { label: 'Эксперт', rows: 60, words: 15 },
 };
 
-export const ROW_LENGTH = 28;
-const MIN_WORD = 3;
-const MAX_WORD = 9;
+/** Длина строки в старых записях истории (до перехода на длинные строки). */
+export const LEGACY_ROW_LENGTH = 28;
+export const MIN_ROW_LENGTH = 26;
+export const MAX_ROW_LENGTH = 56;
+/** Ориентир ширины одной буквы, чтобы по ней было удобно попасть пальцем. */
+const TARGET_CHAR_PX = 15;
+
+export const MIN_WORD = 5;
+const MAX_WORD = 10;
 
 /** Буквы шума: строчная кириллица без «ъ» (она почти не встречается в словах и бросается в глаза). */
 const NOISE_LETTERS = 'абвгдежзийклмнопрстуфхцчшщыьэюя';
@@ -21,29 +27,45 @@ export type Placement = { word: string; row: number; col: number };
 
 export type MunsterbergPuzzle = {
   level: MunsterbergLevel;
+  rowLength: number;
   rows: string[];
   targets: string[];
   placements: Placement[];
 };
 
-/** Словарь, из которого выбираются цели уровня. */
-export function wordPool(level: MunsterbergLevel): string[] {
-  const source = level === 'easy' ? EASY_WORDS : COMMON_WORDS;
-  return source.filter((word) => word.length >= MIN_WORD && word.length <= MAX_WORD);
+/**
+ * Длина строки под доступную ширину: на широком экране 45–56 букв, на телефоне меньше,
+ * чтобы буквы не становились слишком мелкими для касания. Шрифт затем подгоняется точно по ширине.
+ */
+export function rowLengthForWidth(widthPx: number): number {
+  if (!Number.isFinite(widthPx) || widthPx <= 0) return MIN_ROW_LENGTH;
+  return Math.min(MAX_ROW_LENGTH, Math.max(MIN_ROW_LENGTH, Math.round(widthPx / TARGET_CHAR_PX)));
+}
+
+/** Слова-цели уровня: не короче 5 букв. */
+export function wordPool(level: MunsterbergLevel, rowLength = MAX_ROW_LENGTH): string[] {
+  const source = level === 'easy' ? EASY_LONG_WORDS : COMMON_WORDS;
+  const max = Math.min(MAX_WORD, rowLength);
+  return [...new Set(source)].filter((word) => word.length >= MIN_WORD && word.length <= max);
 }
 
 /** Слова, которые нельзя случайно оставить в шуме (все слова словаря в виде «ё → е»). */
-const FORBIDDEN = [...new Set([...COMMON_WORDS, ...EASY_WORDS].map((word) => normalizeWord(word)))].filter(
-  (word) => word.length >= MIN_WORD,
+const FORBIDDEN = [...new Set([...COMMON_WORDS, ...EASY_WORDS, ...EASY_LONG_WORDS].map((word) => normalizeWord(word)))].filter(
+  (word) => word.length >= 3,
 );
 
 /**
- * Генерирует новую таблицу: строки по 28 букв, цели спрятаны в разных строках внутри сплошного шума.
+ * Генерирует новую таблицу: строки заданной длины, цели спрятаны в разных строках внутри сплошного шума.
  * Случайные совпадения шума со словами словаря перегенерируются.
  */
-export function generatePuzzle(level: MunsterbergLevel, random: RandomFn = Math.random): MunsterbergPuzzle {
+export function generatePuzzle(
+  level: MunsterbergLevel,
+  rowLength: number = MAX_ROW_LENGTH,
+  random: RandomFn = Math.random,
+): MunsterbergPuzzle {
+  const length = Math.min(MAX_ROW_LENGTH, Math.max(MIN_ROW_LENGTH, Math.round(rowLength)));
   const { rows: rowCount, words: wordCount } = MUNSTERBERG_LEVELS[level];
-  const targets = sample(wordPool(level), wordCount, random);
+  const targets = sample(wordPool(level, length), wordCount, random);
   const targetRows = sample(
     Array.from({ length: rowCount }, (_, index) => index),
     wordCount,
@@ -51,13 +73,13 @@ export function generatePuzzle(level: MunsterbergLevel, random: RandomFn = Math.
   );
 
   const chars: string[][] = Array.from({ length: rowCount }, () =>
-    Array.from({ length: ROW_LENGTH }, () => NOISE_LETTERS[randomInt(NOISE_LETTERS.length, random)] ?? 'а'),
+    Array.from({ length }, () => NOISE_LETTERS[randomInt(NOISE_LETTERS.length, random)] ?? 'а'),
   );
-  const locked: boolean[][] = Array.from({ length: rowCount }, () => Array<boolean>(ROW_LENGTH).fill(false));
+  const locked: boolean[][] = Array.from({ length: rowCount }, () => Array<boolean>(length).fill(false));
 
   const placements: Placement[] = targets.map((word, index) => {
     const row = targetRows[index] ?? 0;
-    const col = randomInt(ROW_LENGTH - word.length + 1, random);
+    const col = randomInt(length - word.length + 1, random);
     const rowChars = chars[row];
     const rowLocks = locked[row];
     if (rowChars && rowLocks) {
@@ -71,7 +93,7 @@ export function generatePuzzle(level: MunsterbergLevel, random: RandomFn = Math.
 
   scrubAccidentalWords(chars, locked, random);
 
-  return { level, rows: chars.map((row) => row.join('')), targets, placements };
+  return { level, rowLength: length, rows: chars.map((row) => row.join('')), targets, placements };
 }
 
 /** Заменяет буквы шума, если они случайно сложились в слово словаря или повторили цель. */
@@ -116,4 +138,48 @@ export function findAccidentalWords(puzzle: MunsterbergPuzzle): string[] {
     }
   });
   return found;
+}
+
+/** Номер цели, в которую попадает буква (row, col), или null — буква шума. */
+export function wordAt(puzzle: MunsterbergPuzzle, row: number, col: number): number | null {
+  const index = puzzle.placements.findIndex((p) => p.row === row && col >= p.col && col < p.col + p.word.length);
+  return index === -1 ? null : index;
+}
+
+/** Касание слова: отмечает его или снимает отметку. Исходное множество не меняется. */
+export function toggleWord(selected: ReadonlySet<number>, wordIndex: number): Set<number> {
+  const next = new Set(selected);
+  if (next.has(wordIndex)) next.delete(wordIndex);
+  else next.add(wordIndex);
+  return next;
+}
+
+export type RowSegment = { text: string; wordIndex: number | null };
+
+/** Строка, разбитая на участки шума и скрытые слова — для отрисовки без видимых разделителей. */
+export function rowSegments(puzzle: MunsterbergPuzzle, row: number): RowSegment[] {
+  const text = puzzle.rows[row] ?? '';
+  const words = puzzle.placements
+    .map((placement, index) => ({ ...placement, index }))
+    .filter((p) => p.row === row)
+    .sort((a, b) => a.col - b.col);
+  const segments: RowSegment[] = [];
+  let cursor = 0;
+  for (const word of words) {
+    if (word.col > cursor) segments.push({ text: text.slice(cursor, word.col), wordIndex: null });
+    segments.push({ text: text.slice(word.col, word.col + word.word.length), wordIndex: word.index });
+    cursor = word.col + word.word.length;
+  }
+  if (cursor < text.length) segments.push({ text: text.slice(cursor), wordIndex: null });
+  return segments;
+}
+
+export type TapResult = { found: string[]; missed: string[] };
+
+/** Итог по уникальным словам-целям (а не по числу касаний). */
+export function evaluateSelection(puzzle: MunsterbergPuzzle, selected: ReadonlySet<number>): TapResult {
+  const found: string[] = [];
+  const missed: string[] = [];
+  puzzle.targets.forEach((word, index) => (selected.has(index) ? found : missed).push(word));
+  return { found, missed };
 }

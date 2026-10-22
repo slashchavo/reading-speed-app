@@ -89,7 +89,15 @@ export async function saveBook(meta: BookMeta, content: BookContent): Promise<vo
   await done(tx);
 }
 
-export async function updateBookMeta(id: string, patch: { position?: BookPosition; progress?: number; lastOpenedAt?: string }): Promise<void> {
+export type BookMetaPatch = {
+  position?: BookPosition;
+  progress?: number;
+  lastOpenedAt?: string;
+  wordIndex?: number;
+  lastReadWordIndex?: number;
+};
+
+export async function updateBookMeta(id: string, patch: BookMetaPatch): Promise<void> {
   const db = await openDb();
   const tx = db.transaction(META, 'readwrite');
   const store = tx.objectStore(META);

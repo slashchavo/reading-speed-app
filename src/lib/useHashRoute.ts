@@ -8,6 +8,8 @@ export type Route =
   | 'memory'
   | 'mnemo'
   | 'alphabet'
+  | 'colors'
+  | 'triangle'
   | 'reading'
   | 'books'
   | 'progress';
@@ -20,6 +22,8 @@ const ROUTES: readonly Route[] = [
   'memory',
   'mnemo',
   'alphabet',
+  'colors',
+  'triangle',
   'reading',
   'books',
   'progress',
@@ -27,7 +31,7 @@ const ROUTES: readonly Route[] = [
 
 /** Раздел навигации, который подсвечивается для экрана (игры относятся к «Тренировкам»). */
 export function navSection(route: Route): Route {
-  return ['schulte', 'munsterberg', 'memory', 'mnemo', 'alphabet'].includes(route) ? 'trainings' : route;
+  return ['schulte', 'munsterberg', 'memory', 'mnemo', 'alphabet', 'colors', 'triangle'].includes(route) ? 'trainings' : route;
 }
 
 export function routeHref(route: Route): string {

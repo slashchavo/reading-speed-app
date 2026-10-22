@@ -1,127 +1,191 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GameStage } from '../../components/GameStage';
 import { SaveStatus, type SaveState } from '../../components/SaveStatus';
-import { formatDuration, formatStopwatch } from '../../lib/dateUtils';
+import { Segmented } from '../../components/Segmented';
+import { Stat } from '../../components/Stat';
+import { formatClock, formatDuration, roundSeconds } from '../../lib/dateUtils';
 import { createId } from '../../lib/storage';
-import { useStopwatch } from '../../lib/useStopwatch';
-import type { ColorMode, GridSize, SchulteMode, SchulteSession } from '../../types/session';
-import { shuffle } from '../../lib/random';
-import { assignColors, colorModeLabel, createSequence, gridLabel, modeLabel, orderHint } from './schulteUtils';
+import { useCountdown } from '../../lib/useCountdown';
+import type { ColorMode, GridSize, SchulteMode, SchulteOrder, SchulteSession, Settings, SymbolSize } from '../../types/session';
+import { SchulteBoard } from './SchulteBoard';
+import {
+  assignColors,
+  colorModeLabel,
+  createBoard,
+  createSequence,
+  gridLabel,
+  modeLabel,
+  orderHint,
+  orderLabel,
+  orderTargets,
+  SCHULTE_PALETTE,
+  SYMBOL_SIZES,
+  tapTarget,
+  type SessionProgress,
+} from './schulteUtils';
 
 type Phase = 'setup' | 'playing' | 'finished';
+type Minutes = 1 | 2 | 3 | 4 | 5;
 
-type SchulteGameProps = {
-  gridSize: GridSize;
+/** Параметры, зафиксированные в момент старта: изменение настроек не влияет на идущую сессию. */
+type RoundConfig = {
+  size: GridSize;
   mode: SchulteMode;
+  order: SchulteOrder;
   colorMode: ColorMode;
-  onGridSizeChange: (size: GridSize) => void;
-  onModeChange: (mode: SchulteMode) => void;
-  onColorModeChange: (colorMode: ColorMode) => void;
+  symbolSize: SymbolSize;
+  minutes: Minutes;
+};
+
+type Table = { cells: (string | null)[]; colors: (string | null)[] };
+
+type Props = {
+  settings: Settings;
+  onSettingsChange: (patch: Partial<Settings>) => void;
   onComplete: (session: SchulteSession) => boolean;
 };
 
-type Result = {
-  durationSeconds: number;
-  mistakes: number;
-};
-
-const MODES: { value: SchulteMode; label: string }[] = [
+const SIZE_OPTIONS = [
+  { value: 5, label: '5×5' },
+  { value: 7, label: '7×7' },
+] as const;
+const MODE_OPTIONS = [
   { value: 'numbers', label: 'Числа' },
   { value: 'letters', label: 'Латиница' },
   { value: 'cyrillic', label: 'Кириллица' },
-];
+] as const;
+const ORDER_OPTIONS = [
+  { value: 'forward', label: 'Прямой' },
+  { value: 'reverse', label: 'Обратный' },
+] as const;
+const COLOR_OPTIONS = [
+  { value: 'mono', label: 'Чёрно-белый' },
+  { value: 'color', label: 'Цветной' },
+] as const;
+const SYMBOL_OPTIONS = ([1, 2, 3, 4, 5] as const).map((value) => ({ value, label: SYMBOL_SIZES[value].label }));
+const MINUTE_OPTIONS = ([1, 2, 3, 4, 5] as const).map((value) => ({ value, label: `${value} мин` }));
 
-export function SchulteGame({
-  gridSize,
-  mode,
-  colorMode,
-  onGridSizeChange,
-  onModeChange,
-  onColorModeChange,
-  onComplete,
-}: SchulteGameProps) {
+function newTable(config: RoundConfig): { table: Table; targets: string[] } {
+  const sequence = createSequence(config.size, config.mode);
+  const cells = createBoard(sequence, config.size);
+  return { table: { cells, colors: assignColors(cells, config.colorMode) }, targets: orderTargets(sequence, config.order) };
+}
+
+export function SchulteGame({ settings, onSettingsChange, onComplete }: Props) {
+  const config: RoundConfig = {
+    size: settings.schulteGridSize,
+    mode: settings.schulteMode,
+    order: settings.schulteOrder,
+    colorMode: settings.schulteColorMode,
+    symbolSize: settings.schulteSymbolSize,
+    minutes: settings.schulteMinutes,
+  };
   const [phase, setPhase] = useState<Phase>('setup');
-  const [grid, setGrid] = useState<string[]>([]);
-  const [colors, setColors] = useState<(string | null)[]>([]);
-  const [sequence, setSequence] = useState<string[]>([]);
-  const [nextIndex, setNextIndex] = useState(0);
-  const [mistakes, setMistakes] = useState(0);
+  const [round, setRound] = useState<RoundConfig>(config);
+  const [table, setTable] = useState<Table>({ cells: [], colors: [] });
+  const [progress, setProgress] = useState<SessionProgress>({ targets: [], index: 0, correct: 0, wrong: 0, tablesCompleted: 0 });
+  const [deadline, setDeadline] = useState<number | null>(null);
   const [wrongCell, setWrongCell] = useState<string | null>(null);
-  const [result, setResult] = useState<Result | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [saveState, setSaveState] = useState<SaveState>('idle');
-  const stopwatch = useStopwatch();
-  const wrongTimeout = useRef<number | null>(null);
+  const [previewPx, setPreviewPx] = useState(0);
+  const startedAtRef = useRef(0);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const savedRef = useRef(false);
+  const timers = useRef<number[]>([]);
   const resultRef = useRef<HTMLHeadingElement>(null);
 
-  // Очищаем таймер подсветки ошибки при размонтировании.
-  useEffect(
-    () => () => {
-      if (wrongTimeout.current !== null) window.clearTimeout(wrongTimeout.current);
-    },
-    [],
-  );
-
+  useEffect(() => () => timers.current.forEach((id) => window.clearTimeout(id)), []);
   useEffect(() => {
     if (phase === 'finished') resultRef.current?.focus();
   }, [phase]);
 
-  const start = () => {
-    const nextSequence = createSequence(gridSize, mode);
-    setSequence(nextSequence);
-    setGrid(shuffle(nextSequence));
-    setColors(assignColors(nextSequence.length, colorMode));
-    setNextIndex(0);
-    setMistakes(0);
-    setWrongCell(null);
-    setResult(null);
-    setSaveState('idle');
-    setPhase('playing');
-    stopwatch.start();
+  // Предпросмотр с реальной сеткой, палитрой и размером символа. Обновляется при изменении настроек.
+  const preview = useMemo(
+    () => newTable(config).table,
+    [config.size, config.mode, config.colorMode, config.order],
+  );
+
+  const later = (fn: () => void, ms: number) => {
+    timers.current.push(window.setTimeout(fn, ms));
   };
 
-  const backToSetup = () => {
-    stopwatch.reset();
-    setPhase('setup');
-    setResult(null);
-  };
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
 
-  const flashWrong = (value: string) => {
-    setWrongCell(value);
-    if (wrongTimeout.current !== null) window.clearTimeout(wrongTimeout.current);
-    wrongTimeout.current = window.setTimeout(() => setWrongCell(null), 600);
-  };
-
-  const handleCellClick = (value: string) => {
-    if (phase !== 'playing') return;
-    const foundIndex = sequence.indexOf(value);
-    // Уже найденные элементы игнорируем: это не ошибка, а повторное нажатие.
-    if (foundIndex !== -1 && foundIndex < nextIndex) return;
-
-    if (value !== sequence[nextIndex]) {
-      setMistakes((count) => count + 1);
-      flashWrong(value);
-      return;
-    }
-
-    const newIndex = nextIndex + 1;
-    setNextIndex(newIndex);
-    if (newIndex < sequence.length) return;
-
-    // Последний элемент найден — останавливаем секундомер и сохраняем результат один раз.
-    const durationSeconds = Math.round(stopwatch.stop() / 100) / 10;
-    const finalResult: Result = { durationSeconds, mistakes };
-    setResult(finalResult);
+  /** Конец сессии по таймеру: результат сохраняется ровно один раз. */
+  const finishSession = useCallback(() => {
+    setDeadline(null);
+    if (phaseRef.current !== 'playing') return;
+    phaseRef.current = 'finished';
+    const seconds = roundSeconds(Date.now() - startedAtRef.current);
+    setElapsedSeconds(seconds);
     setPhase('finished');
+    if (savedRef.current) return;
+    savedRef.current = true;
+    const final = progressRef.current;
     const saved = onComplete({
       id: createId(),
       type: 'schulte',
       completedAt: new Date().toISOString(),
-      durationSeconds,
-      gridSize,
-      mode,
-      mistakes,
-      colorMode,
+      durationSeconds: seconds,
+      gridSize: round.size,
+      mode: round.mode,
+      mistakes: final.wrong,
+      colorMode: round.colorMode,
+      sessionMinutes: round.minutes,
+      tablesCompleted: final.tablesCompleted,
+      correctTaps: final.correct,
+      order: round.order,
+      symbolSize: round.symbolSize,
     });
     setSaveState(saved ? 'saved' : 'failed');
+  }, [onComplete, round]);
+
+  const remaining = useCountdown(phase === 'playing' ? deadline : null, finishSession);
+
+  const start = () => {
+    const fixed = { ...config };
+    const first = newTable(fixed);
+    setRound(fixed);
+    setTable(first.table);
+    setProgress({ targets: first.targets, index: 0, correct: 0, wrong: 0, tablesCompleted: 0 });
+    setWrongCell(null);
+    setFlash(null);
+    setSaveState('idle');
+    savedRef.current = false;
+    startedAtRef.current = Date.now();
+    setDeadline(Date.now() + fixed.minutes * 60_000);
+    setPhase('playing');
+  };
+
+  const abort = () => {
+    setDeadline(null);
+    setPhase('setup');
+  };
+
+  const handleTap = (value: string | null) => {
+    if (phase !== 'playing' || Date.now() >= (deadline ?? 0)) return;
+    const step = tapTarget(progress, value);
+    if (step.outcome === 'ignored') return;
+    if (step.outcome === 'wrong') {
+      setProgress(step.progress);
+      setWrongCell(value);
+      later(() => setWrongCell((current) => (current === value ? null : current)), 500);
+      return;
+    }
+    if (step.outcome === 'table-complete') {
+      // Сразу новая таблица с теми же параметрами, поиск снова с начала последовательности.
+      const next = newTable(round);
+      setTable(next.table);
+      setProgress({ ...step.progress, targets: next.targets, index: 0 });
+      setFlash(`Таблица ${step.progress.tablesCompleted} пройдена!`);
+      later(() => setFlash(null), 1200);
+      return;
+    }
+    setProgress(step.progress);
   };
 
   if (phase === 'setup') {
@@ -130,60 +194,35 @@ export function SchulteGame({
         <h2 id="schulte-setup-title" className="card__title">
           Настройки
         </h2>
-        <fieldset className="choice">
-          <legend className="choice__legend">Размер сетки</legend>
-          <div className="segmented">
-            {([5, 7] as const).map((size) => (
-              <label key={size} className="segmented__option">
-                <input
-                  type="radio"
-                  name="grid-size"
-                  value={size}
-                  checked={gridSize === size}
-                  onChange={() => onGridSizeChange(size)}
-                />
-                <span>{gridLabel(size)}</span>
-              </label>
-            ))}
+        <div className="schulte-setup">
+          <div>
+            <Segmented name="sh-size" legend="Размер таблицы" options={SIZE_OPTIONS} value={config.size} onChange={(schulteGridSize) => onSettingsChange({ schulteGridSize })} />
+            <Segmented name="sh-mode" legend="Содержимое" options={MODE_OPTIONS} value={config.mode} onChange={(schulteMode) => onSettingsChange({ schulteMode })} />
+            <Segmented name="sh-order" legend="Порядок поиска" options={ORDER_OPTIONS} value={config.order} onChange={(schulteOrder) => onSettingsChange({ schulteOrder })} />
+            <Segmented name="sh-color" legend="Цвет символов" options={COLOR_OPTIONS} value={config.colorMode} onChange={(schulteColorMode) => onSettingsChange({ schulteColorMode })} />
+            <Segmented name="sh-symbol" legend="Размер символа" options={SYMBOL_OPTIONS} value={config.symbolSize} onChange={(schulteSymbolSize) => onSettingsChange({ schulteSymbolSize })} />
+            <Segmented name="sh-minutes" legend="Длительность сессии" options={MINUTE_OPTIONS} value={config.minutes} onChange={(schulteMinutes) => onSettingsChange({ schulteMinutes })} />
           </div>
-        </fieldset>
-        <fieldset className="choice">
-          <legend className="choice__legend">Содержимое</legend>
-          <div className="segmented">
-            {MODES.map((item) => (
-              <label key={item.value} className="segmented__option">
-                <input
-                  type="radio"
-                  name="grid-mode"
-                  value={item.value}
-                  checked={mode === item.value}
-                  onChange={() => onModeChange(item.value)}
-                />
-                <span>{item.label}</span>
-              </label>
-            ))}
+          <div className="schulte-preview">
+            <p className="field__label">Предпросмотр</p>
+            <SchulteBoard
+              size={config.size}
+              cells={preview.cells}
+              colors={preview.colors}
+              symbolSize={config.symbolSize}
+              onFontPx={setPreviewPx}
+              label="Предпросмотр таблицы"
+            />
+            <p className="muted schulte-preview__note">
+              Размер символа: {SYMBOL_SIZES[config.symbolSize].label.toLowerCase()}
+              {previewPx > 0 ? ` (сейчас ${previewPx} px)` : ''}.
+              {config.colorMode === 'color' && ` Цвета: ${SCHULTE_PALETTE.map((c) => c.name).join(', ')}.`}
+            </p>
           </div>
-        </fieldset>
-        <fieldset className="choice">
-          <legend className="choice__legend">Цвет символов</legend>
-          <div className="segmented">
-            {(['mono', 'color'] as const).map((value) => (
-              <label key={value} className="segmented__option">
-                <input
-                  type="radio"
-                  name="grid-color"
-                  value={value}
-                  checked={colorMode === value}
-                  onChange={() => onColorModeChange(value)}
-                />
-                <span>{value === 'mono' ? 'Чёрно-белый' : 'Цветной'}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        </div>
         <p className="muted">
-          {orderHint(gridSize, mode)}{' '}
-          Старайтесь смотреть в центр таблицы и находить элементы периферическим зрением.
+          {orderHint(config.size, config.mode, config.order)} За {config.minutes} мин пройдите как можно больше таблиц:
+          после последней цели сразу появится новая. Засчитываются только полностью пройденные таблицы.
         </p>
         <button type="button" className="button button--primary button--large" onClick={start}>
           Начать тренировку
@@ -192,34 +231,28 @@ export function SchulteGame({
     );
   }
 
-  if (phase === 'finished' && result) {
+  if (phase === 'finished') {
     return (
       <section className="card result" aria-labelledby="schulte-result-title">
         <h2 id="schulte-result-title" className="card__title" tabIndex={-1} ref={resultRef}>
-          Готово!
+          Сессия завершена
         </h2>
         <dl className="stats">
-          <div className="stat">
-            <dt className="stat__label">Время</dt>
-            <dd className="stat__value">{formatDuration(result.durationSeconds)}</dd>
-          </div>
-          <div className="stat">
-            <dt className="stat__label">Ошибки</dt>
-            <dd className="stat__value">{result.mistakes}</dd>
-          </div>
-          <div className="stat">
-            <dt className="stat__label">Таблица</dt>
-            <dd className="stat__value">
-              {gridLabel(gridSize)}, {modeLabel(mode)}, {colorModeLabel(colorMode)}
-            </dd>
-          </div>
+          <Stat label="Пройдено таблиц" value={String(progress.tablesCompleted)} />
+          <Stat label="Верных нажатий" value={String(progress.correct)} />
+          <Stat label="Ошибок" value={String(progress.wrong)} />
+          <Stat label="Время сессии" value={formatDuration(elapsedSeconds)} />
         </dl>
+        <p className="muted">
+          {gridLabel(round.size)}, {modeLabel(round.mode)}, {orderLabel(round.order)}, {colorModeLabel(round.colorMode)},
+          сессия {round.minutes} мин.
+        </p>
         <SaveStatus state={saveState} />
         <div className="actions">
           <button type="button" className="button button--primary" onClick={start}>
-            Повторить
+            Новая сессия
           </button>
-          <button type="button" className="button" onClick={backToSetup}>
+          <button type="button" className="button" onClick={abort}>
             Изменить настройки
           </button>
         </div>
@@ -227,66 +260,53 @@ export function SchulteGame({
     );
   }
 
-  const target = sequence[nextIndex] ?? '';
+  const target = progress.targets[progress.index] ?? '';
+  const found = new Set(progress.targets.slice(0, progress.index));
 
   return (
-    <section className="schulte" aria-label="Тренировка Шульте">
-      <div className="schulte__status">
+    <GameStage label="Тренировка Шульте">
+      <div className="stage-bar">
         <div className="schulte__target">
           <span className="muted">Найдите:</span>{' '}
           <strong className="schulte__target-value" aria-live="polite">
             {target}
           </strong>
         </div>
-        <div className="schulte__meta">
+        <div className="stage-bar__stats">
           <span>
-            Время: <strong className="mono">{formatStopwatch(stopwatch.elapsedMs)}</strong>
+            <strong className="mono countdown">{formatClock(remaining)}</strong>
           </span>
           <span>
-            Ошибки: <strong>{mistakes}</strong>
+            Таблиц: <strong>{progress.tablesCompleted}</strong>
           </span>
           <span>
-            Найдено: <strong>{nextIndex}</strong> из {sequence.length}
+            Ошибок: <strong>{progress.wrong}</strong>
           </span>
         </div>
       </div>
+      <p className="stage-flash" aria-live="polite">
+        {flash ?? ' '}
+      </p>
       <p className="visually-hidden" aria-live="assertive">
         {wrongCell ? `Ошибка: ${wrongCell}. Нужно найти ${target}.` : ''}
       </p>
-      <div className={`schulte__grid schulte__grid--${gridSize}`} role="group" aria-label="Таблица">
-        {grid.map((value, position) => {
-          const color = colors[position] ?? null;
-          const index = sequence.indexOf(value);
-          const found = index < nextIndex;
-          const wrong = wrongCell === value;
-          const className = ['cell', found ? 'cell--found' : '', wrong ? 'cell--wrong' : '', value.length > 1 ? 'cell--pair' : '']
-            .join(' ')
-            .trim();
-          return (
-            <button
-              key={value}
-              type="button"
-              className={className}
-              onClick={() => handleCellClick(value)}
-              aria-label={found ? `${value}, найдено` : value}
-              aria-disabled={found || undefined}
-              style={color && !found && !wrong ? { color } : undefined}
-            >
-              {value}
-              {wrong && (
-                <span className="cell__mark" aria-hidden="true">
-                  ✕
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="stage-board">
+        <SchulteBoard
+          size={round.size}
+          cells={table.cells}
+          colors={table.colors}
+          symbolSize={round.symbolSize}
+          found={found}
+          wrongCell={wrongCell}
+          onTap={handleTap}
+          label="Таблица"
+        />
       </div>
-      <div className="actions">
-        <button type="button" className="button" onClick={backToSetup}>
+      <div className="stage-actions">
+        <button type="button" className="button" onClick={abort}>
           Прервать (не сохранять)
         </button>
       </div>
-    </section>
+    </GameStage>
   );
 }

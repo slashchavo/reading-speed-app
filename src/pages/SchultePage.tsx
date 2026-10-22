@@ -12,17 +12,9 @@ export function SchultePage({ settings, onSettingsChange, onComplete }: SchulteP
     <div className="page">
       <header className="page__header">
         <h1>Таблица Шульте</h1>
-        <p className="lead">Найдите все элементы по порядку как можно быстрее и без ошибок.</p>
+        <p className="lead">Находите элементы по порядку. Сессия по таймеру: чем больше таблиц, тем лучше.</p>
       </header>
-      <SchulteGame
-        gridSize={settings.schulteGridSize}
-        mode={settings.schulteMode}
-        colorMode={settings.schulteColorMode}
-        onColorModeChange={(schulteColorMode) => onSettingsChange({ schulteColorMode })}
-        onGridSizeChange={(schulteGridSize) => onSettingsChange({ schulteGridSize })}
-        onModeChange={(schulteMode) => onSettingsChange({ schulteMode })}
-        onComplete={onComplete}
-      />
+      <SchulteGame settings={settings} onSettingsChange={onSettingsChange} onComplete={onComplete} />
     </div>
   );
 }

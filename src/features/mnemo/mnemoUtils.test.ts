@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { seededRandom } from '../../lib/random';
 import {
+  EASY_SHAPES,
   emptyColors,
   emptyPlacement,
   evaluateRound,
@@ -45,6 +46,29 @@ describe('generateRound', () => {
     const a = generateRound('medium', seededRandom(1));
     const b = generateRound('medium', seededRandom(2));
     expect(a.elements.map((e) => `${e.id}@${e.cell}`).join()).not.toBe(b.elements.map((e) => `${e.id}@${e.cell}`).join());
+  });
+});
+
+describe('лёгкий уровень', () => {
+  it('ровно 9 разных простых фигур, без букв, символов и «повёрнутых» пар; 16 пустых клеток', () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const round = generateRound('easy', seededRandom(seed));
+      expect(round.elements).toHaveLength(9);
+      expect(round.elements.every((e) => e.kind === 'shape')).toBe(true);
+      const glyphs = round.elements.map((e) => e.glyph).sort();
+      expect(glyphs).toEqual([...EASY_SHAPES.map((s) => s.glyph)].sort());
+      expect(glyphs).not.toContain('cross');
+      expect(glyphs).not.toContain('diamond');
+      expect(GRID_CELLS - new Set(round.elements.map((e) => e.cell)).size).toBe(16);
+    }
+  });
+
+  it('максимальный уровень не упрощён: 25 элементов, 8 цветов, похожие пары', () => {
+    expect(MNEMO_LEVELS.expert).toMatchObject({ elements: 25, colors: 8 });
+    const round = generateRound('expert', seededRandom(3));
+    const ids = new Set(round.elements.map((e) => e.id));
+    const pairs = [['shape:circle', 'shape:ring'], ['letter:И', 'letter:Й'], ['letter:Ш', 'letter:Щ'], ['shape:triangle', 'shape:triangle-down'], ['letter:Е', 'letter:Ё'], ['letter:З', 'letter:Э'], ['letter:Ь', 'letter:Ъ'], ['shape:square', 'shape:square-outline'], ['shape:hexagon', 'shape:pentagon']];
+    expect(pairs.filter(([a, b]) => ids.has(a!) && ids.has(b!)).length).toBeGreaterThanOrEqual(4);
   });
 });
 

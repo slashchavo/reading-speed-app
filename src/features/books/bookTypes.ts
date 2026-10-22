@@ -19,9 +19,14 @@ export type BookMeta = {
   wordCount: number;
   chapterCount: number;
   fragmentCount: number;
+  /** Позиция старого формата (глава + фрагмент) — сохраняется для совместимости. */
   position: BookPosition;
-  /** 0–100, доля фрагментов до текущей позиции. */
+  /** 0–100, доля прочитанного. */
   progress: number;
+  /** Номер первого слова текущей страницы (сквозная нумерация). Нет у книг, открытых только в старой версии. */
+  wordIndex?: number;
+  /** Номер последнего прочитанного слова из последнего замера. */
+  lastReadWordIndex?: number;
   lastOpenedAt?: string;
 };
 

@@ -3,6 +3,7 @@ import { AppLayout } from '../components/AppLayout';
 import { NavigateContext, useHashRoute, type Route } from '../lib/useHashRoute';
 import { AlphabetPage } from '../pages/AlphabetPage';
 import { BooksPage } from '../pages/BooksPage';
+import { ColorMatchPage } from '../pages/ColorMatchPage';
 import { HomePage } from '../pages/HomePage';
 import { MemoryPage } from '../pages/MemoryPage';
 import { MnemoPage } from '../pages/MnemoPage';
@@ -11,6 +12,7 @@ import { ProgressPage } from '../pages/ProgressPage';
 import { ReaderPage } from '../pages/ReaderPage';
 import { SchultePage } from '../pages/SchultePage';
 import { TrainingsPage } from '../pages/TrainingsPage';
+import { TrianglePage } from '../pages/TrianglePage';
 import { useAppData } from './useAppData';
 
 const TITLES: Record<Route, string> = {
@@ -21,6 +23,8 @@ const TITLES: Record<Route, string> = {
   memory: 'Память на слова — Фокус',
   mnemo: 'Мнемотаблица — Фокус',
   alphabet: 'От А до Я — Фокус',
+  colors: 'Совпадает ли цвет? — Фокус',
+  triangle: 'Треугольное поле — Фокус',
   reading: 'Чтение — Фокус',
   books: 'Мои книги — Фокус',
   progress: 'Прогресс — Фокус',
@@ -46,6 +50,8 @@ export function App() {
         {route === 'memory' && <MemoryPage {...common} />}
         {route === 'mnemo' && <MnemoPage {...common} />}
         {route === 'alphabet' && <AlphabetPage onComplete={data.addSession} />}
+        {route === 'colors' && <ColorMatchPage {...common} />}
+        {route === 'triangle' && <TrianglePage {...common} />}
         {route === 'reading' && <ReaderPage {...common} />}
         {route === 'books' && <BooksPage {...common} />}
         {route === 'progress' && (

@@ -8,6 +8,8 @@ const TYPE_BY_ROUTE: Record<string, TrainingType> = {
   memory: 'memory_words',
   mnemo: 'mnemo_grid',
   alphabet: 'alphabet_association',
+  colors: 'color_match',
+  triangle: 'triangle_field',
 };
 
 type Props = { sessions: Session[] };

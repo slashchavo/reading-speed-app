@@ -35,6 +35,12 @@ export const DEFAULT_SETTINGS: Settings = {
   memoryMinutes: 1,
   mnemoLevel: 'easy',
   mnemoMinutes: 1,
+  schulteOrder: 'forward',
+  schulteSymbolSize: 3,
+  schulteMinutes: 1,
+  colorMatchMinutes: 1,
+  triangleMode: 'timed',
+  triangleMinutes: 2,
 };
 
 export const FONT_SIZE_MIN = 14;
@@ -76,6 +82,17 @@ function isLevel(value: unknown): value is MunsterbergLevel & MnemoLevel {
   return typeof value === 'string' && (LEVELS as readonly string[]).includes(value);
 }
 
+function isMinutes5(value: unknown): value is 1 | 2 | 3 | 4 | 5 {
+  return value === 1 || value === 2 || value === 3 || value === 4 || value === 5;
+}
+
+/** Добавляет к записи необязательные числовые поля, только если они корректны. */
+function optionalCounts<T extends object>(target: T, source: Record<string, unknown>, keys: readonly string[]): T {
+  const extra: Record<string, number> = {};
+  for (const key of keys) if (isCount(source[key])) extra[key] = source[key] as number;
+  return { ...target, ...extra };
+}
+
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value !== '' ? value : undefined;
 }
@@ -104,7 +121,17 @@ export function parseSession(value: unknown): Session | null {
     case 'schulte': {
       const { gridSize, mode, mistakes, colorMode } = value;
       if (!isGridSize(gridSize) || !isSchulteMode(mode) || !isCount(mistakes)) return null;
-      return { ...base, type, gridSize, mode, mistakes, ...(isColorMode(colorMode) ? { colorMode } : {}) };
+      const session = optionalCounts(
+        { ...base, type, gridSize, mode, mistakes, ...(isColorMode(colorMode) ? { colorMode } : {}) },
+        value,
+        ['sessionMinutes', 'tablesCompleted', 'correctTaps'],
+      );
+      const { order, symbolSize } = value;
+      return {
+        ...session,
+        ...(order === 'forward' || order === 'reverse' ? { order } : {}),
+        ...(isMinutes5(symbolSize) ? { symbolSize } : {}),
+      };
     }
     case 'reading': {
       const { wordCount, wordsPerMinute, source } = value;
@@ -117,13 +144,13 @@ export function parseSession(value: unknown): Session | null {
       if (textId) session.textId = textId;
       if (bookId) session.bookId = bookId;
       if (title) session.title = title;
-      return session;
+      return optionalCounts(session, value, ['startWordIndex', 'endWordIndex']);
     }
     case 'munsterberg': {
       const { level, rows, targetCount, found, missed, extra } = value;
       if (!isLevel(level) || !isCount(rows) || !isCount(targetCount) || targetCount === 0) return null;
       if (!isCount(found) || !isCount(missed) || !isCount(extra)) return null;
-      return { ...base, type, level, rows, targetCount, found, missed, extra };
+      return optionalCounts({ ...base, type, level, rows, targetCount, found, missed, extra }, value, ['wrongTaps', 'rowLength']);
     }
     case 'memory_words': {
       const { wordCount, memorizeMinutes, correct, missed, extra } = value;
@@ -142,6 +169,26 @@ export function parseSession(value: unknown): Session | null {
       const answers = parseAlphabetAnswers(value.answers);
       if (typeof letter !== 'string' || letter === '' || !isCount(filled) || !isCount(skipped) || !answers) return null;
       return { ...base, type, letter, filled, skipped, answers };
+    }
+    case 'color_match': {
+      const { durationMinutes, attempts, correct, wrong } = value;
+      if (!isFiniteNonNegative(durationMinutes) || !isCount(attempts) || !isCount(correct) || !isCount(wrong)) return null;
+      if (correct + wrong !== attempts) return null;
+      return { ...base, type, durationMinutes, attempts, correct, wrong };
+    }
+    case 'triangle_field': {
+      const { mode, found, mistakes, completed, timeLimitMinutes } = value;
+      if (mode !== 'timed' && mode !== 'complete') return null;
+      if (!isCount(found) || found > 99 || !isCount(mistakes) || typeof completed !== 'boolean') return null;
+      return {
+        ...base,
+        type,
+        mode,
+        found,
+        mistakes,
+        completed,
+        ...(isMinutes5(timeLimitMinutes) ? { timeLimitMinutes } : {}),
+      };
     }
     default:
       return null;
@@ -204,10 +251,16 @@ export function parseSettings(value: unknown): Settings {
       typeof value.memoryWordCount === 'number' ? clampMemoryWordCount(value.memoryWordCount) : d.memoryWordCount,
     memoryMinutes: memoryMinutes === 1 || memoryMinutes === 2 || memoryMinutes === 3 ? memoryMinutes : d.memoryMinutes,
     mnemoLevel: isLevel(value.mnemoLevel) ? value.mnemoLevel : d.mnemoLevel,
-    mnemoMinutes:
-      mnemoMinutes === 1 || mnemoMinutes === 2 || mnemoMinutes === 3 || mnemoMinutes === 4 || mnemoMinutes === 5
-        ? mnemoMinutes
-        : d.mnemoMinutes,
+    mnemoMinutes: isMinutes5(mnemoMinutes) ? mnemoMinutes : d.mnemoMinutes,
+    schulteOrder: value.schulteOrder === 'forward' || value.schulteOrder === 'reverse' ? value.schulteOrder : d.schulteOrder,
+    schulteSymbolSize: isMinutes5(value.schulteSymbolSize) ? value.schulteSymbolSize : d.schulteSymbolSize,
+    schulteMinutes: isMinutes5(value.schulteMinutes) ? value.schulteMinutes : d.schulteMinutes,
+    colorMatchMinutes:
+      value.colorMatchMinutes === 1 || value.colorMatchMinutes === 2 || value.colorMatchMinutes === 3
+        ? value.colorMatchMinutes
+        : d.colorMatchMinutes,
+    triangleMode: value.triangleMode === 'timed' || value.triangleMode === 'complete' ? value.triangleMode : d.triangleMode,
+    triangleMinutes: isMinutes5(value.triangleMinutes) ? value.triangleMinutes : d.triangleMinutes,
   };
 }
 
