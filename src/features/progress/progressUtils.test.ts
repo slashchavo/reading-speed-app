@@ -16,6 +16,17 @@ const sessions: Session[] = [
   },
 ];
 
+const stage3: Session[] = [
+  {
+    id: 's1', type: 'schulte', completedAt: '2026-10-09T10:00:00.000Z', durationSeconds: 120, gridSize: 7, mode: 'cyrillic', mistakes: 4,
+    colorMode: 'color', sessionMinutes: 2, tablesCompleted: 3, correctTaps: 99, order: 'reverse', symbolSize: 3,
+  },
+  { id: 'c1', type: 'color_match', completedAt: '2026-10-10T10:00:00.000Z', durationSeconds: 60, durationMinutes: 1, attempts: 40, correct: 30, wrong: 10 },
+  { id: 'c2', type: 'color_match', completedAt: '2026-10-10T11:00:00.000Z', durationSeconds: 60, durationMinutes: 1, attempts: 20, correct: 18, wrong: 2 },
+  { id: 't1', type: 'triangle_field', completedAt: '2026-10-11T10:00:00.000Z', durationSeconds: 300, mode: 'complete', found: 99, mistakes: 5, completed: true },
+  { id: 't2', type: 'triangle_field', completedAt: '2026-10-11T11:00:00.000Z', durationSeconds: 60, mode: 'timed', timeLimitMinutes: 1, found: 31, mistakes: 2, completed: false },
+];
+
 describe('progressUtils', () => {
   it('сортирует от новых к старым', () => {
     expect(sortNewestFirst(sessions).map((s) => s.id)).toEqual(['h', 'g', 'f', 'e', 'd', 'b', 'c', 'a']);
@@ -24,7 +35,9 @@ describe('progressUtils', () => {
   it('считает метрики по каждому типу отдельно', () => {
     const summary = summarize(sessions);
     expect(summary.totalSessions).toBe(8);
-    expect(summary.countByType).toEqual({ reading: 2, schulte: 2, munsterberg: 1, memory_words: 1, mnemo_grid: 1, alphabet_association: 1 });
+    expect(summary.countByType).toEqual({
+      reading: 2, schulte: 2, munsterberg: 1, memory_words: 1, mnemo_grid: 1, alphabet_association: 1, color_match: 0, triangle_field: 0,
+    });
     expect(summary.reading).toEqual({ best: 300, average: 250 });
     expect(summary.schulte.best).toEqual({ 5: 35, 7: null });
     expect(summary.munsterberg.bestPercent).toBe(80);
@@ -32,6 +45,17 @@ describe('progressUtils', () => {
     expect(summary.mnemo).toEqual({ averagePosition: 92, averageColor: 78 });
     expect(summary.alphabet.letters).toBe(1);
     expect(summary.lastSession?.id).toBe('h');
+  });
+
+  it('новые типы и сессии Шульте не смешиваются со старыми метриками', () => {
+    const summary = summarize([...sessions, ...stage3]);
+    expect(summary.schulte.best).toEqual({ 5: 35, 7: null });
+    expect(summary.schulte.bestSession).toEqual({ tables: 3, minutes: 2, gridSize: 7 });
+    expect(summary.colorMatch).toEqual({ bestAccuracy: 90, averageAccuracy: 83 });
+    expect(summary.triangle).toEqual({ bestCompleteSeconds: 300, bestFound: 99 });
+    expect(describeSession(stage3[0] as Session)).toBe('7×7, кириллица, цветной, обратный порядок · таблиц: 3 за 2 мин · ошибок: 4');
+    expect(describeSession(stage3[1] as Session)).toBe('верно 30 из 40 (75 %) · ошибок: 10 · 1 мин');
+    expect(describeSession(stage3[4] as Session)).toBe('на время, 1 мин · найдено 31 из 99 · ошибок: 2');
   });
 
   it('пустая история — без фиктивных значений', () => {

@@ -4,11 +4,13 @@ import { RouteLink } from './RouteLink';
 export type TrainingCard = { route: Route; title: string; icon: string; description: string };
 
 export const GAME_CARDS: readonly TrainingCard[] = [
-  { route: 'schulte', title: 'Таблица Шульте', icon: '▦', description: 'Числа, латиница или кириллица по порядку; сетка 5×5 или 7×7, цветная или чёрно-белая.' },
-  { route: 'munsterberg', title: 'Тест Мюнстерберга', icon: 'Аб', description: 'Найдите слова, спрятанные в сплошном ряду букв. Четыре уровня сложности.' },
+  { route: 'schulte', title: 'Таблица Шульте', icon: '▦', description: 'Сессия 1–5 минут: как можно больше таблиц. Числа, латиница или кириллица, прямой или обратный порядок.' },
+  { route: 'munsterberg', title: 'Тест Мюнстерберга', icon: 'Аб', description: 'Найдите слова, спрятанные в сплошном ряду букв, и отметьте их касанием.' },
   { route: 'memory', title: 'Память на слова', icon: '≡', description: 'Запомните от 5 до 50 слов за 1–3 минуты и запишите всё, что вспомните.' },
   { route: 'mnemo', title: 'Мнемотаблица', icon: '◩', description: 'Запомните положение и цвет фигур, букв и символов на поле 5×5 и восстановите их.' },
   { route: 'alphabet', title: 'От А до Я', icon: 'Я', description: 'Подберите слова на одну букву для 12 категорий. Каждая буква — раз в день.' },
+  { route: 'colors', title: 'Совпадает ли цвет?', icon: '◐', description: 'Сравните название цвета слева с цветом букв справа и ответьте «Да» или «Нет».' },
+  { route: 'triangle', title: 'Треугольное поле', icon: '△', description: 'Найдите числа от 1 до 99 по порядку среди разноцветных треугольников.' },
 ];
 
 export const READING_CARDS: readonly TrainingCard[] = [

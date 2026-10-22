@@ -885,26 +885,69 @@ a {
 
 /* ---------- Мюнстерберг ---------- */
 
+.mb-area {
+  width: 100%;
+}
+
 .mb-rows {
   font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
-  /* 28 букв в строке: размер подстраивается под ширину, чтобы строка не переносилась. */
-  font-size: clamp(0.8rem, 3.6vw, 1.35rem);
-  letter-spacing: 0.04em;
-  line-height: 1.7;
-  margin: 0 0 1rem;
+  font-size: 1rem;
+  line-height: 1.9;
+  /* Блок по центру: сам массив ровно по ширине строк. */
+  width: max-content;
+  max-width: 100%;
+  margin: 0 auto 1rem;
   padding: 0.5rem 0;
-  overflow-x: auto;
+  letter-spacing: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  background: var(--surface);
+  border-radius: var(--radius);
 }
 
 .mb-row {
-  white-space: nowrap;
+  white-space: pre;
 }
 
-.mb-hit {
-  background: #ffe066;
-  color: var(--text);
+/* До выбора скрытое слово ничем не отличается от шума. */
+.mb-word {
+  border-radius: 3px;
+}
+
+.mb-word--selected {
+  background: #e8edff;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--primary);
+}
+
+.mb-word--found {
+  background: var(--success-bg);
+  color: var(--success-text);
   font-weight: 700;
-  border-bottom: 2px solid var(--text);
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.mb-word--missed {
+  background: #fff3bf;
+  font-weight: 700;
+  text-decoration: underline dashed;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.mb-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+  padding: 0.5rem 0;
+  margin-bottom: 0.5rem;
 }
 
 /* ---------- Память на слова ---------- */
@@ -1358,4 +1401,402 @@ a {
 /* В режиме «По порядку» буквы карты только показывают статус. */
 .ab-letter:disabled:not(.ab-letter--done) {
   opacity: 0.6;
+}
+
+/* ---------- Этап 2, правки: игровая сцена без прокрутки ---------- */
+
+.game-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px))
+    max(0.75rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+  overscroll-behavior: none;
+}
+
+.game-stage__inner {
+  height: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.stage-bar {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  min-height: 3.25rem;
+}
+
+.stage-bar__stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Строка обратной связи всегда одной высоты — поле под ней не сдвигается. */
+.stage-flash {
+  flex: none;
+  margin: 0;
+  height: 1.5rem;
+  line-height: 1.5rem;
+  text-align: center;
+  font-weight: 700;
+  color: var(--success-text);
+}
+
+.stage-board {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage-actions {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.schulte__target-value {
+  min-width: 3.2ch;
+}
+
+/* ---------- Шульте ---------- */
+
+.schulte-board {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  aspect-ratio: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.schulte-board--5 {
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+}
+
+.schulte-board--7 {
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(7, 1fr);
+}
+
+/* В игре поле не больше доступной высоты экрана — без прокрутки. */
+.stage-board .schulte-board {
+  width: min(100%, calc(100vh - 13rem));
+  max-width: 760px;
+}
+
+@supports (height: 100dvh) {
+  .stage-board .schulte-board {
+    width: min(100%, calc(100dvh - 13rem));
+  }
+}
+
+.schulte-board--active {
+  touch-action: none;
+}
+
+.schulte-board .cell {
+  aspect-ratio: auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  overflow: hidden;
+  padding: 0;
+}
+
+.cell--empty {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.schulte-setup {
+  display: grid;
+  gap: 1rem 2rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 760px) {
+  .schulte-setup {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.schulte-preview {
+  width: min(100%, 380px);
+  justify-self: center;
+}
+
+.schulte-preview__note {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
+
+/* ---------- Совпадает ли цвет? ---------- */
+
+.cm-question {
+  flex: none;
+  margin: 0;
+  text-align: center;
+  font-weight: 600;
+}
+
+.cm-cards {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+  max-height: 22rem;
+}
+
+.cm-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 7rem;
+  padding: 1rem 0.5rem;
+  border-radius: 18px;
+  font-size: clamp(1.1rem, 4.6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.cm-card--plain {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  color: var(--text);
+}
+
+.cm-answers {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.cm-answer {
+  min-height: 72px;
+  font-size: 1.5rem;
+  touch-action: manipulation;
+}
+
+.cm-answer--yes {
+  border-color: var(--success-text);
+  color: var(--success-text);
+}
+
+.cm-answer--no {
+  border-color: var(--error-text);
+  color: var(--error-text);
+}
+
+.cm-example {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  max-width: 520px;
+}
+
+.cm-example .cm-card {
+  min-height: 4rem;
+  font-size: 1.2rem;
+}
+
+.cm-example__answer {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+/* ---------- Треугольное поле ---------- */
+
+.tri-field {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Если треугольники не помещаются, прокручивается только поле, не страница. */
+  overflow: auto;
+  display: flex;
+  justify-content: safe center;
+  align-items: safe center;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tri-svg {
+  flex: none;
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tri-cell {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tri-cell polygon {
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.tri-cell text {
+  font-weight: 800;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.tri-cell:focus,
+.tri-cell:focus-visible {
+  outline: none;
+}
+
+.tri-cell:focus-visible polygon {
+  stroke: var(--focus);
+  stroke-width: 4;
+}
+
+.tri-cell--wrong polygon {
+  stroke: #1c2233;
+  stroke-width: 5;
+}
+
+.tri-cell--done {
+  cursor: default;
+}
+
+/* ---------- Мюнстерберг: строка действий ---------- */
+
+.mb-actions {
+  background: var(--bg);
+}
+
+/* ---------- Книги: страницы и замер ---------- */
+
+.book-toolbar {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.book-toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.book-measure {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--bg);
+  padding: 0.5rem 0;
+}
+
+.book-measure__active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.book-hint {
+  margin: 0.5rem 0 0;
+}
+
+.book-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.book-pager__counter {
+  color: var(--text-muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.book-page {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem clamp(1rem, 4vw, 2.5rem);
+  line-height: 1.9;
+  max-width: 46rem;
+  margin: 0 auto;
+  overflow-wrap: anywhere;
+  touch-action: pan-y;
+}
+
+.book-page p {
+  margin: 0 0 1em;
+}
+
+.book-page__chapter {
+  font-size: 1.2em;
+  margin: 0 0 0.75em;
+}
+
+/* Во время замера слова — цели касания с запасом по высоте строки. */
+.book-page--measuring .bk-word {
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0.15em 0;
+}
+
+.book-page--measuring .bk-word:hover {
+  background: var(--surface-muted);
+}
+
+.bk-word--start {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.bk-word--end {
+  background: var(--primary);
+  color: var(--primary-text);
+  padding: 0.15em 0.2em;
+}
+
+.bk-word--last {
+  background: #fff3bf;
+  border-bottom: 2px solid #e8a300;
+}
+
+.book-lastread {
+  text-align: center;
+}
+
+.book-result {
+  margin-bottom: 0.75rem;
 }

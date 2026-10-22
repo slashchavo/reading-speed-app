@@ -4,6 +4,10 @@ export type SchulteMode = 'numbers' | 'letters' | 'cyrillic';
 export type ColorMode = 'mono' | 'color';
 export type MunsterbergLevel = 'easy' | 'medium' | 'hard' | 'expert';
 export type MnemoLevel = 'easy' | 'medium' | 'hard' | 'expert';
+export type SchulteOrder = 'forward' | 'reverse';
+/** Ступени размера символа в ячейке Шульте: 1 — компактный … 5 — крупный. */
+export type SymbolSize = 1 | 2 | 3 | 4 | 5;
+export type TriangleMode = 'timed' | 'complete';
 
 export type TrainingType =
   | 'reading'
@@ -11,7 +15,9 @@ export type TrainingType =
   | 'munsterberg'
   | 'memory_words'
   | 'mnemo_grid'
-  | 'alphabet_association';
+  | 'alphabet_association'
+  | 'color_match'
+  | 'triangle_field';
 
 type BaseSession = {
   id: string;
@@ -26,6 +32,15 @@ export type SchulteSession = BaseSession & {
   mistakes: number;
   /** Нет в записях первого этапа — тогда считается чёрно-белым. */
   colorMode?: ColorMode;
+  /**
+   * Поля сессионного режима (1–5 минут). В старых записях их нет: там durationSeconds —
+   * время одной таблицы, а mistakes — ошибки в ней.
+   */
+  sessionMinutes?: number;
+  tablesCompleted?: number;
+  correctTaps?: number;
+  order?: SchulteOrder;
+  symbolSize?: SymbolSize;
 };
 
 export type ReadingSource = 'builtin' | 'custom' | 'book';
@@ -39,6 +54,9 @@ export type ReadingSession = BaseSession & {
   textId?: string;
   bookId?: string;
   title?: string;
+  /** Для книг: номера первого и последнего прочитанного слова (сквозная нумерация по книге). */
+  startWordIndex?: number;
+  endWordIndex?: number;
 };
 
 export type MunsterbergSession = BaseSession & {
@@ -48,7 +66,12 @@ export type MunsterbergSession = BaseSession & {
   targetCount: number;
   found: number;
   missed: number;
+  /** Лишние слова (ручной ввод, старые записи) — в режиме касаний всегда 0. */
   extra: number;
+  /** Касания по буквам шума в режиме отметки касанием. */
+  wrongTaps?: number;
+  /** Длина строки в буквах (нет в старых записях — тогда 28). */
+  rowLength?: number;
 };
 
 export type MemoryWordsSession = BaseSession & {
@@ -87,13 +110,35 @@ export type AlphabetSession = BaseSession & {
   answers: AlphabetAnswer[];
 };
 
+export type ColorMatchSession = BaseSession & {
+  type: 'color_match';
+  durationMinutes: number;
+  attempts: number;
+  correct: number;
+  wrong: number;
+};
+
+export type TriangleFieldSession = BaseSession & {
+  type: 'triangle_field';
+  mode: TriangleMode;
+  /** Для режима «На время». */
+  timeLimitMinutes?: number;
+  /** Сколько чисел найдено по порядку (наибольшее достигнутое число). */
+  found: number;
+  mistakes: number;
+  /** true — пройдены все 99 чисел. */
+  completed: boolean;
+};
+
 export type Session =
   | SchulteSession
   | ReadingSession
   | MunsterbergSession
   | MemoryWordsSession
   | MnemoGridSession
-  | AlphabetSession;
+  | AlphabetSession
+  | ColorMatchSession
+  | TriangleFieldSession;
 
 export type Settings = {
   readerFontSize: number;
@@ -105,4 +150,10 @@ export type Settings = {
   memoryMinutes: 1 | 2 | 3;
   mnemoLevel: MnemoLevel;
   mnemoMinutes: 1 | 2 | 3 | 4 | 5;
+  schulteOrder: SchulteOrder;
+  schulteSymbolSize: SymbolSize;
+  schulteMinutes: 1 | 2 | 3 | 4 | 5;
+  colorMatchMinutes: 1 | 2 | 3;
+  triangleMode: TriangleMode;
+  triangleMinutes: 1 | 2 | 3 | 4 | 5;
 };

@@ -40,6 +40,17 @@ const newTypes: Session[] = [
   },
   { id: 's', type: 'schulte', completedAt: '2026-10-02T10:00:00.000Z', durationSeconds: 30, gridSize: 7, mode: 'cyrillic', mistakes: 2, colorMode: 'color' },
   { id: 'r', type: 'reading', completedAt: '2026-10-02T10:00:00.000Z', durationSeconds: 60, wordCount: 320, wordsPerMinute: 320, source: 'builtin', textId: 'lib-01', title: 'Облака' },
+  {
+    id: 'rb', type: 'reading', completedAt: '2026-10-03T10:00:00.000Z', durationSeconds: 90, wordCount: 300, wordsPerMinute: 200, source: 'book',
+    bookId: 'b1', title: 'Книга', startWordIndex: 1200, endWordIndex: 1499,
+  },
+  {
+    id: 'ss', type: 'schulte', completedAt: '2026-10-03T10:00:00.000Z', durationSeconds: 180, gridSize: 5, mode: 'numbers', mistakes: 3, colorMode: 'mono',
+    sessionMinutes: 3, tablesCompleted: 5, correctTaps: 125, order: 'reverse', symbolSize: 4,
+  },
+  { id: 'mt', type: 'munsterberg', completedAt: '2026-10-03T10:00:00.000Z', durationSeconds: 80, level: 'easy', rows: 30, targetCount: 5, found: 4, missed: 1, extra: 0, wrongTaps: 2, rowLength: 52 },
+  { id: 'cm', type: 'color_match', completedAt: '2026-10-03T10:00:00.000Z', durationSeconds: 120, durationMinutes: 2, attempts: 50, correct: 45, wrong: 5 },
+  { id: 'tf', type: 'triangle_field', completedAt: '2026-10-03T10:00:00.000Z', durationSeconds: 300, mode: 'timed', timeLimitMinutes: 5, found: 77, mistakes: 6, completed: false },
 ];
 
 describe('loadSessions', () => {
@@ -77,6 +88,8 @@ describe('loadSessions', () => {
       { ...newTypes[2], positionAccuracy: 150 },
       { ...newTypes[0], level: 'super' },
       { id: 'z', type: 'unknown', completedAt: valid.completedAt, durationSeconds: 1 },
+      { id: 'c', type: 'color_match', completedAt: valid.completedAt, durationSeconds: 60, durationMinutes: 1, attempts: 5, correct: 4, wrong: 4 },
+      { id: 't', type: 'triangle_field', completedAt: valid.completedAt, durationSeconds: 60, mode: 'timed', found: 120, mistakes: 0, completed: false },
     ]);
     expect(loadSessions(memoryStorage({ [SESSIONS_KEY]: raw }))).toEqual({ sessions: [valid], issue: 'corrupted' });
   });

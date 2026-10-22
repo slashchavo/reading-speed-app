@@ -1,14 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { SaveStatus, type SaveState } from '../../components/SaveStatus';
 import { Segmented } from '../../components/Segmented';
 import { Stat } from '../../components/Stat';
 import { WordChips } from '../../components/WordChips';
-import { checkAnswers, percent, type AnswerCheck } from '../../lib/answers';
+import { percent } from '../../lib/answers';
 import { formatDuration, formatStopwatch, roundSeconds } from '../../lib/dateUtils';
 import { createId } from '../../lib/storage';
+import { useElementWidth } from '../../lib/useElementWidth';
 import { useStopwatch } from '../../lib/useStopwatch';
 import type { MunsterbergLevel, MunsterbergSession } from '../../types/session';
-import { generatePuzzle, MUNSTERBERG_LEVELS, type MunsterbergPuzzle } from './munsterbergUtils';
+import {
+  evaluateSelection,
+  generatePuzzle,
+  MUNSTERBERG_LEVELS,
+  rowLengthForWidth,
+  rowSegments,
+  toggleWord,
+  type MunsterbergPuzzle,
+  type TapResult,
+} from './munsterbergUtils';
 
 type Phase = 'setup' | 'playing' | 'finished';
 
@@ -23,23 +33,33 @@ const LEVEL_OPTIONS = (Object.keys(MUNSTERBERG_LEVELS) as MunsterbergLevel[]).ma
   label: MUNSTERBERG_LEVELS[value].label,
 }));
 
+/** Ширина буквы моноширинного шрифта относительно его размера (с небольшим запасом). */
+const CHAR_RATIO = 0.62;
+const MAX_FONT = 26;
+
 export function MunsterbergGame({ level, onLevelChange, onComplete }: Props) {
   const [phase, setPhase] = useState<Phase>('setup');
   const [puzzle, setPuzzle] = useState<MunsterbergPuzzle | null>(null);
-  const [answer, setAnswer] = useState('');
-  const [result, setResult] = useState<{ check: AnswerCheck; durationSeconds: number } | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [wrongTaps, setWrongTaps] = useState(0);
+  const [result, setResult] = useState<{ tap: TapResult; durationSeconds: number } | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const stopwatch = useStopwatch();
   const savedRef = useRef(false);
   const resultRef = useRef<HTMLHeadingElement>(null);
+  const areaRef = useRef<HTMLDivElement>(null);
+  const areaWidth = useElementWidth(areaRef);
 
   useEffect(() => {
     if (phase === 'finished') resultRef.current?.focus();
   }, [phase]);
 
   const start = () => {
-    setPuzzle(generatePuzzle(level));
-    setAnswer('');
+    // Длина строки выбирается один раз при старте под текущую ширину и не меняется до конца теста.
+    const width = areaRef.current?.clientWidth ?? areaWidth;
+    setPuzzle(generatePuzzle(level, rowLengthForWidth(width)));
+    setSelected(new Set());
+    setWrongTaps(0);
     setResult(null);
     setSaveState('idle');
     savedRef.current = false;
@@ -50,23 +70,24 @@ export function MunsterbergGame({ level, onLevelChange, onComplete }: Props) {
   const finish = () => {
     if (!puzzle || phase !== 'playing') return;
     const durationSeconds = roundSeconds(stopwatch.stop());
-    const check = checkAnswers(puzzle.targets, answer);
-    setResult({ check, durationSeconds });
+    const tap = evaluateSelection(puzzle, selected);
+    setResult({ tap, durationSeconds });
     setPhase('finished');
     if (savedRef.current) return;
     savedRef.current = true;
-    const config = MUNSTERBERG_LEVELS[puzzle.level];
     const saved = onComplete({
       id: createId(),
       type: 'munsterberg',
       completedAt: new Date().toISOString(),
       durationSeconds,
       level: puzzle.level,
-      rows: config.rows,
+      rows: puzzle.rows.length,
       targetCount: puzzle.targets.length,
-      found: check.found.length,
-      missed: check.missed.length,
-      extra: check.extra.length,
+      found: tap.found.length,
+      missed: tap.missed.length,
+      extra: 0,
+      wrongTaps,
+      rowLength: puzzle.rowLength,
     });
     setSaveState(saved ? 'saved' : 'failed');
   };
@@ -77,122 +98,128 @@ export function MunsterbergGame({ level, onLevelChange, onComplete }: Props) {
     setPuzzle(null);
   };
 
-  // Подсветка целей в таблице — только после проверки.
-  const highlighted = useMemo(() => {
-    if (!puzzle || phase !== 'finished') return null;
-    return puzzle.rows.map((row, index) => {
-      const placement = puzzle.placements.find((p) => p.row === index);
-      if (!placement) return { before: row, word: '', after: '' };
-      return {
-        before: row.slice(0, placement.col),
-        word: row.slice(placement.col, placement.col + placement.word.length),
-        after: row.slice(placement.col + placement.word.length),
-      };
-    });
-  }, [puzzle, phase]);
+  /** Касания обрабатываются на всём блоке: скрытые слова не являются отдельными кнопками и ничем не выделяются. */
+  const handleTap = (event: MouseEvent<HTMLDivElement>) => {
+    if (phase !== 'playing') return;
+    const target = event.target as HTMLElement;
+    const word = target.closest<HTMLElement>('[data-word]');
+    if (word) {
+      setSelected((current) => toggleWord(current, Number(word.dataset.word)));
+      return;
+    }
+    if (target.closest('.mb-row')) setWrongTaps((count) => count + 1);
+  };
 
-  if (phase === 'setup') {
-    const config = MUNSTERBERG_LEVELS[level];
-    return (
-      <section className="card" aria-labelledby="mb-setup">
-        <h2 id="mb-setup" className="card__title">
-          Настройки
-        </h2>
-        <Segmented name="mb-level" legend="Сложность" options={LEVEL_OPTIONS} value={level} onChange={onLevelChange} />
-        <p className="muted">
-          {config.rows} строк по 28 букв, спрятано слов: {config.words}. Слова не выделены и стоят внутри сплошного
-          ряда букв. Найдите их и впишите в поле ответа через пробел, запятую или с новой строки.
-        </p>
-        <button type="button" className="button button--primary button--large" onClick={start}>
-          Начать
-        </button>
-      </section>
-    );
-  }
+  const fontSize = puzzle && areaWidth > 0 ? Math.min(MAX_FONT, areaWidth / (puzzle.rowLength * CHAR_RATIO)) : undefined;
 
-  if (!puzzle) return null;
+  const renderRows = (current: MunsterbergPuzzle, reveal: boolean) =>
+    current.rows.map((_, rowIndex) => (
+      <div key={rowIndex} className="mb-row">
+        {rowSegments(current, rowIndex).map((segment, segmentIndex) => {
+          if (segment.wordIndex === null) return <span key={segmentIndex}>{segment.text}</span>;
+          const isSelected = selected.has(segment.wordIndex);
+          const className = reveal
+            ? isSelected
+              ? 'mb-word mb-word--found'
+              : 'mb-word mb-word--missed'
+            : isSelected
+              ? 'mb-word mb-word--selected'
+              : 'mb-word';
+          return (
+            <span key={segmentIndex} className={className} data-word={reveal ? undefined : segment.wordIndex}>
+              {segment.text}
+            </span>
+          );
+        })}
+      </div>
+    ));
 
-  if (phase === 'finished' && result && highlighted) {
-    const { check } = result;
-    return (
-      <section className="card result" aria-labelledby="mb-result">
-        <h2 id="mb-result" className="card__title" tabIndex={-1} ref={resultRef}>
-          Результат
-        </h2>
-        <dl className="stats">
-          <Stat label="Сложность" value={MUNSTERBERG_LEVELS[puzzle.level].label} />
-          <Stat label="Время" value={formatDuration(result.durationSeconds)} />
-          <Stat label="Найдено" value={`${check.found.length} из ${puzzle.targets.length}`} />
-          <Stat label="Выполнено" value={`${percent(check.found.length, puzzle.targets.length)} %`} />
-        </dl>
-        <SaveStatus state={saveState} />
-        <div className="chips-grid">
-          <WordChips title="Найдены" words={check.found} tone="ok" empty="Пока ни одного — получится в следующий раз." />
-          <WordChips title="Пропущены" words={check.missed} tone="missed" empty="Пропусков нет." />
-          <WordChips title="Лишние ответы" words={check.extra} tone="extra" empty="Лишних ответов нет." />
-        </div>
-        <details className="details">
-          <summary>Показать, где были спрятаны слова</summary>
-          <div className="mb-rows" aria-label="Таблица с выделенными словами">
-            {highlighted.map((row, index) => (
-              <div key={index} className="mb-row">
-                {row.before}
-                {row.word && <mark className="mb-hit">{row.word}</mark>}
-                {row.after}
-              </div>
-            ))}
-          </div>
-        </details>
-        <div className="actions">
-          <button type="button" className="button button--primary" onClick={start}>
-            Новый тест
-          </button>
-          <button type="button" className="button" onClick={abort}>
-            Изменить сложность
-          </button>
-        </div>
-      </section>
-    );
-  }
+  const config = MUNSTERBERG_LEVELS[level];
 
   return (
-    <section className="card" aria-label="Тест Мюнстерберга">
-      <div className="game-bar">
-        <span>
-          Время: <strong className="mono">{formatStopwatch(stopwatch.elapsedMs)}</strong>
-        </span>
-        <span>
-          {MUNSTERBERG_LEVELS[puzzle.level].label} · слов: {puzzle.targets.length}
-        </span>
-      </div>
-      <div className="mb-rows" aria-label={`Таблица букв: ${puzzle.rows.length} строк`}>
-        {puzzle.rows.map((row, index) => (
-          <div key={index} className="mb-row">
-            {row}
+    <>
+      {phase === 'setup' && (
+        <section className="card" aria-labelledby="mb-setup">
+          <h2 id="mb-setup" className="card__title">
+            Настройки
+          </h2>
+          <Segmented name="mb-level" legend="Сложность" options={LEVEL_OPTIONS} value={level} onChange={onLevelChange} />
+          <p className="muted">
+            {config.rows} строк, спрятано слов: {config.words} (каждое не короче 5 букв). Слова ничем не выделены и стоят
+            внутри сплошного ряда букв. Найдите слово и коснитесь любой его буквы — оно отметится. Повторное касание
+            снимает отметку. Когда закончите, нажмите «Завершить тест».
+          </p>
+          <button type="button" className="button button--primary button--large" onClick={start}>
+            Начать
+          </button>
+        </section>
+      )}
+
+      {phase === 'finished' && puzzle && result && (
+        <section className="card result" aria-labelledby="mb-result">
+          <h2 id="mb-result" className="card__title" tabIndex={-1} ref={resultRef}>
+            Результат
+          </h2>
+          <dl className="stats">
+            <Stat label="Сложность" value={MUNSTERBERG_LEVELS[puzzle.level].label} />
+            <Stat label="Время" value={formatDuration(result.durationSeconds)} />
+            <Stat label="Найдено" value={`${result.tap.found.length} из ${puzzle.targets.length}`} />
+            <Stat label="Выполнено" value={`${percent(result.tap.found.length, puzzle.targets.length)} %`} />
+            <Stat label="Касаний мимо слов" value={String(wrongTaps)} />
+          </dl>
+          <SaveStatus state={saveState} />
+          <div className="chips-grid">
+            <WordChips title="Найдены" words={result.tap.found} tone="ok" empty="Пока ни одного — получится в следующий раз." />
+            <WordChips title="Пропущены" words={result.tap.missed} tone="missed" empty="Пропусков нет!" />
           </div>
-        ))}
+          <div className="actions">
+            <button type="button" className="button button--primary" onClick={start}>
+              Новый тест
+            </button>
+            <button type="button" className="button" onClick={abort}>
+              Изменить сложность
+            </button>
+          </div>
+          <h3 className="chips-block__title">Где были слова</h3>
+          <p className="muted">Найденные подчёркнуты сплошной линией, пропущенные — пунктиром.</p>
+        </section>
+      )}
+
+      {phase === 'playing' && puzzle && (
+        <div className="game-bar mb-bar">
+          <span>
+            Время: <strong className="mono">{formatStopwatch(stopwatch.elapsedMs)}</strong>
+          </span>
+          <span>
+            {MUNSTERBERG_LEVELS[puzzle.level].label} · отмечено: <strong>{selected.size}</strong> из {puzzle.targets.length}
+          </span>
+        </div>
+      )}
+
+      {/* Блок всегда в разметке, чтобы до старта измерить доступную ширину. */}
+      <div ref={areaRef} className="mb-area">
+        {puzzle && phase !== 'setup' && (
+          <div
+            className={`mb-rows${phase === 'playing' ? ' mb-rows--active' : ''}`}
+            style={{ fontSize }}
+            onClick={handleTap}
+            aria-label={`Таблица букв: ${puzzle.rows.length} строк по ${puzzle.rowLength} букв`}
+          >
+            {renderRows(puzzle, phase === 'finished')}
+          </div>
+        )}
       </div>
-      <label className="field">
-        <span className="field__label">Найденные слова</span>
-        <textarea
-          className="field__textarea field__textarea--short"
-          value={answer}
-          onChange={(event) => setAnswer(event.target.value)}
-          rows={3}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          placeholder="Например: дом, сад, мяч"
-        />
-      </label>
-      <div className="actions actions--sticky">
-        <button type="button" className="button button--primary button--large" onClick={finish}>
-          Проверить результат
-        </button>
-        <button type="button" className="button" onClick={abort}>
-          Прервать (не сохранять)
-        </button>
-      </div>
-    </section>
+
+      {phase === 'playing' && (
+        <div className="actions actions--sticky mb-actions">
+          <button type="button" className="button button--primary button--large" onClick={finish}>
+            Завершить тест
+          </button>
+          <button type="button" className="button" onClick={abort}>
+            Прервать (не сохранять)
+          </button>
+        </div>
+      )}
+    </>
   );
 }

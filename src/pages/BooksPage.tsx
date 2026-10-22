@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { deleteBook, listBooks } from '../features/books/bookDb';
 import { BookImport } from '../features/books/BookImport';
 import { BookReader } from '../features/books/BookReader';
-import type { BookMeta, BookPosition } from '../features/books/bookTypes';
+import type { BookMetaPatch } from '../features/books/bookDb';
+import type { BookMeta } from '../features/books/bookTypes';
 import { formatFileSize } from '../features/books/bookUtils';
 import { formatDateTime } from '../lib/dateUtils';
 import type { ReadingSession, Settings } from '../types/session';
@@ -51,8 +52,8 @@ export function BooksPage({ settings, onSettingsChange, onComplete }: Props) {
     }
   };
 
-  const onPositionSaved = useCallback((id: string, position: BookPosition, progress: number) => {
-    setBooks((current) => current?.map((b) => (b.id === id ? { ...b, position, progress } : b)) ?? current);
+  const onMetaSaved = useCallback((id: string, patch: BookMetaPatch) => {
+    setBooks((current) => current?.map((b) => (b.id === id ? { ...b, ...patch } : b)) ?? current);
   }, []);
 
   const openBook = books?.find((b) => b.id === openId);
@@ -61,7 +62,7 @@ export function BooksPage({ settings, onSettingsChange, onComplete }: Props) {
     <div className="page">
       <header className="page__header">
         <h1>Мои книги</h1>
-        <p className="lead">Загрузите свою книгу и читайте её по фрагментам, замеряя скорость.</p>
+        <p className="lead">Загрузите свою книгу, листайте страницы и замеряйте скорость до последнего прочитанного слова.</p>
       </header>
 
       {openBook ? (
@@ -74,7 +75,7 @@ export function BooksPage({ settings, onSettingsChange, onComplete }: Props) {
             setOpenId(null);
             refresh();
           }}
-          onPositionSaved={onPositionSaved}
+          onMetaSaved={onMetaSaved}
         />
       ) : (
         <>

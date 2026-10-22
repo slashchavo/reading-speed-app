@@ -38,7 +38,7 @@ export const MNEMO_COLORS: readonly MnemoColor[] = [
 ];
 
 export const MNEMO_LEVELS: Record<MnemoLevel, { label: string; elements: number; colors: number; description: string }> = {
-  easy: { label: 'Лёгкий', elements: 9, colors: 3, description: 'фигуры' },
+  easy: { label: 'Лёгкий', elements: 9, colors: 3, description: 'простые разные фигуры' },
   medium: { label: 'Средний', elements: 16, colors: 4, description: 'фигуры и буквы' },
   hard: { label: 'Сложный', elements: 25, colors: 6, description: 'фигуры, буквы и символы' },
   expert: { label: 'Эксперт', elements: 25, colors: 8, description: 'все типы, включая похожие знаки' },
@@ -70,6 +70,14 @@ export const SIMILAR_SHAPES: readonly MnemoGlyph[] = [
   shape('square-outline', 'контур квадрата'),
   shape('pentagon', 'пятиугольник'),
 ];
+
+/**
+ * Лёгкий уровень: ровно 9 простых фигур, которые нельзя спутать. Нет пар, отличающихся только поворотом
+ * (плюс/косой крест, квадрат/ромб), нет букв и символов.
+ */
+export const EASY_SHAPES: readonly MnemoGlyph[] = ['circle', 'square', 'triangle', 'star', 'plus', 'hexagon', 'heart', 'crescent', 'drop'].map(
+  (id) => DISTINCT_SHAPES.find((s) => s.glyph === id) as MnemoGlyph,
+);
 
 export const BASIC_LETTERS: readonly MnemoGlyph[] = ['Б', 'Г', 'Д', 'Ж', 'И', 'Л', 'П', 'Ф', 'Ц', 'Ш', 'Ю', 'Я', 'Ы', 'К', 'Р'].map(
   letter,
@@ -109,7 +117,7 @@ const BY_ID = new Map(ALL_GLYPHS.map((g) => [g.id, g]));
 /** Набор уникальных знаков для уровня. */
 export function pickGlyphs(level: MnemoLevel, random: RandomFn = Math.random): MnemoGlyph[] {
   const count = MNEMO_LEVELS[level].elements;
-  if (level === 'easy') return sample(DISTINCT_SHAPES, count, random);
+  if (level === 'easy') return sample(EASY_SHAPES, count, random);
   if (level === 'medium') return sample([...DISTINCT_SHAPES, ...BASIC_LETTERS], count, random);
   if (level === 'hard') return sample([...DISTINCT_SHAPES, ...BASIC_LETTERS, ...SYMBOLS], count, random);
 

@@ -83,11 +83,18 @@ function ProgressContent({ sessions, filter, limit, onFilter, onLimit }: Content
               hint={`В среднем ${show(s.reading.average, ' слов/мин')} · занятий: ${c.reading}`}
             />
           )}
-          {c.schulte > 0 && (
+          {s.schulte.bestSession && (
             <StatCard
-              label="Шульте: лучшее время"
+              label="Шульте: лучшая сессия"
+              value={`${s.schulte.bestSession.tables} табл.`}
+              hint={`за ${s.schulte.bestSession.minutes} мин, ${s.schulte.bestSession.gridSize}×${s.schulte.bestSession.gridSize} · занятий: ${c.schulte}`}
+            />
+          )}
+          {(s.schulte.best[5] !== null || s.schulte.best[7] !== null) && (
+            <StatCard
+              label="Шульте: лучшее время таблицы (старые записи)"
               value={`5×5: ${s.schulte.best[5] === null ? '—' : formatDuration(s.schulte.best[5])}`}
-              hint={`7×7: ${s.schulte.best[7] === null ? '—' : formatDuration(s.schulte.best[7])} · занятий: ${c.schulte}`}
+              hint={`7×7: ${s.schulte.best[7] === null ? '—' : formatDuration(s.schulte.best[7])}`}
             />
           )}
           {c.munsterberg > 0 && (
@@ -109,6 +116,20 @@ function ProgressContent({ sessions, filter, limit, onFilter, onLimit }: Content
               label="Мнемотаблица: средняя точность"
               value={`положение ${show(s.mnemo.averagePosition, ' %')}`}
               hint={`цвет ${show(s.mnemo.averageColor, ' %')} · раундов: ${c.mnemo_grid}`}
+            />
+          )}
+          {c.color_match > 0 && (
+            <StatCard
+              label="Совпадает ли цвет?: лучшая точность"
+              value={show(s.colorMatch.bestAccuracy, ' %')}
+              hint={`В среднем ${show(s.colorMatch.averageAccuracy, ' %')} · раундов: ${c.color_match}`}
+            />
+          )}
+          {c.triangle_field > 0 && (
+            <StatCard
+              label="Треугольное поле"
+              value={s.triangle.bestCompleteSeconds === null ? `до ${show(s.triangle.bestFound, '')} из 99` : formatDuration(s.triangle.bestCompleteSeconds)}
+              hint={`${s.triangle.bestCompleteSeconds === null ? 'Лучший результат на время' : 'Лучшее время всего поля'} · раундов: ${c.triangle_field}`}
             />
           )}
           {c.alphabet_association > 0 && (
