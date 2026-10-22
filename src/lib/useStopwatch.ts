@@ -11,10 +11,16 @@ export function useStopwatch() {
 
   useEffect(() => {
     if (!running) return undefined;
-    const id = window.setInterval(() => {
+    const tick = () => {
       if (startRef.current !== null) setElapsedMs(performance.now() - startRef.current);
-    }, 100);
-    return () => window.clearInterval(id);
+    };
+    const id = window.setInterval(tick, 100);
+    // При возвращении на вкладку сразу показываем актуальное время.
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [running]);
 
   const start = useCallback(() => {

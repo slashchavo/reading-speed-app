@@ -1,8 +1,34 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
-export type Route = 'home' | 'schulte' | 'reading' | 'progress';
+export type Route =
+  | 'home'
+  | 'trainings'
+  | 'schulte'
+  | 'munsterberg'
+  | 'memory'
+  | 'mnemo'
+  | 'alphabet'
+  | 'reading'
+  | 'books'
+  | 'progress';
 
-const ROUTES: readonly Route[] = ['home', 'schulte', 'reading', 'progress'];
+const ROUTES: readonly Route[] = [
+  'home',
+  'trainings',
+  'schulte',
+  'munsterberg',
+  'memory',
+  'mnemo',
+  'alphabet',
+  'reading',
+  'books',
+  'progress',
+];
+
+/** Раздел навигации, который подсвечивается для экрана (игры относятся к «Тренировкам»). */
+export function navSection(route: Route): Route {
+  return ['schulte', 'munsterberg', 'memory', 'mnemo', 'alphabet'].includes(route) ? 'trainings' : route;
+}
 
 export function routeHref(route: Route): string {
   return route === 'home' ? '#/' : `#/${route}`;

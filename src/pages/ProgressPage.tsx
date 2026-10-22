@@ -1,80 +1,123 @@
+import { useState } from 'react';
 import { RouteLink } from '../components/RouteLink';
 import { StatCard } from '../components/StatCard';
-import { sessionTypeLabel, sortNewestFirst, summarize } from '../features/progress/progressUtils';
-import { gridLabel, modeLabel } from '../features/schulte/schulteUtils';
+import { BackupPanel } from '../features/progress/BackupPanel';
+import { describeSession, sessionTypeLabel, sortNewestFirst, summarize, TRAINING_LABELS } from '../features/progress/progressUtils';
 import { formatDateTime, formatDuration } from '../lib/dateUtils';
-import type { Session } from '../types/session';
+import type { Session, Settings, TrainingType } from '../types/session';
 
 type ProgressPageProps = {
   sessions: Session[];
+  settings: Settings;
+  onImport: (sessions: Session[], settings: Settings) => number | null;
 };
 
-function describeResult(session: Session): string {
-  if (session.type === 'reading') {
-    return `${session.wordsPerMinute} слов/мин · ${session.wordCount} слов`;
-  }
-  return `${gridLabel(session.gridSize)}, ${modeLabel(session.mode)} · ошибок: ${session.mistakes}`;
-}
+const PAGE_SIZE = 30;
+type Filter = 'all' | TrainingType;
 
-export function ProgressPage({ sessions }: ProgressPageProps) {
-  if (sessions.length === 0) {
-    return (
-      <div className="page">
-        <header className="page__header">
-          <h1>Прогресс</h1>
-        </header>
-        <section className="card empty">
-          <h2 className="card__title">История пока пуста</h2>
-          <p className="muted">Завершите первую тренировку — её результат появится здесь.</p>
-          <div className="actions">
-            <RouteLink className="button button--primary" to="schulte">
-              Таблица Шульте
-            </RouteLink>
-            <RouteLink className="button button--primary" to="reading">
-              Чтение
-            </RouteLink>
-          </div>
-        </section>
-      </div>
-    );
-  }
+const show = (value: number | null, suffix: string) => (value === null ? '—' : `${value}${suffix}`);
 
-  const summary = summarize(sessions);
-  const ordered = sortNewestFirst(sessions);
-  const best5 = summary.bestSchulteSeconds[5];
-  const best7 = summary.bestSchulteSeconds[7];
+export function ProgressPage({ sessions, settings, onImport }: ProgressPageProps) {
+  const [filter, setFilter] = useState<Filter>('all');
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
+  // Блок резервной копии всегда стоит на одном месте, чтобы не терять сообщение после восстановления.
   return (
     <div className="page">
       <header className="page__header">
         <h1>Прогресс</h1>
-        <p className="lead">Все завершённые тренировки на этом устройстве.</p>
+        {sessions.length > 0 && (
+          <p className="lead">
+            Все завершённые тренировки на этом устройстве. Метрики разных упражнений не сравниваются между собой.
+          </p>
+        )}
       </header>
+      {sessions.length === 0 ? (
+        <section className="card empty">
+          <h2 className="card__title">История пока пуста</h2>
+          <p className="muted">Завершите первую тренировку — её результат появится здесь.</p>
+          <div className="actions">
+            <RouteLink className="button button--primary" to="reading">
+              Чтение
+            </RouteLink>
+            <RouteLink className="button button--primary" to="trainings">
+              Тренировки
+            </RouteLink>
+          </div>
+        </section>
+      ) : (
+        <ProgressContent sessions={sessions} filter={filter} limit={limit} onFilter={setFilter} onLimit={setLimit} />
+      )}
+      <BackupPanel sessions={sessions} settings={settings} onImport={onImport} />
+    </div>
+  );
+}
 
-      <section className="section" aria-labelledby="progress-summary-title">
+type ContentProps = {
+  sessions: Session[];
+  filter: Filter;
+  limit: number;
+  onFilter: (filter: Filter) => void;
+  onLimit: (limit: number) => void;
+};
+
+function ProgressContent({ sessions, filter, limit, onFilter, onLimit }: ContentProps) {
+  const s = summarize(sessions);
+  const c = s.countByType;
+  const ordered = sortNewestFirst(sessions).filter((item) => filter === 'all' || item.type === filter);
+  const visible = ordered.slice(0, limit);
+  const types = (Object.keys(TRAINING_LABELS) as TrainingType[]).filter((type) => c[type] > 0);
+
+  return (
+    <>
+      <section className="section section--first" aria-labelledby="progress-summary-title">
         <h2 id="progress-summary-title" className="section__title">
           Сводка
         </h2>
         <dl className="stats">
-          <StatCard label="Всего занятий" value={String(summary.totalSessions)} />
-          <StatCard
-            label="Чтение: лучший темп"
-            value={summary.bestWordsPerMinute === null ? '—' : `${summary.bestWordsPerMinute} слов/мин`}
-            hint={
-              summary.averageWordsPerMinute === null
-                ? 'Нет занятий'
-                : `В среднем ${summary.averageWordsPerMinute} слов/мин · занятий: ${summary.readingCount}`
-            }
-          />
-          <StatCard
-            label="Шульте 5×5: лучшее время"
-            value={best5 === null ? '—' : formatDuration(best5)}
-          />
-          <StatCard
-            label="Шульте 7×7: лучшее время"
-            value={best7 === null ? '—' : formatDuration(best7)}
-            hint={`Всего занятий Шульте: ${summary.schulteCount}`}
-          />
+          <StatCard label="Всего занятий" value={String(s.totalSessions)} />
+          {c.reading > 0 && (
+            <StatCard
+              label="Чтение: лучший темп"
+              value={show(s.reading.best, ' слов/мин')}
+              hint={`В среднем ${show(s.reading.average, ' слов/мин')} · занятий: ${c.reading}`}
+            />
+          )}
+          {c.schulte > 0 && (
+            <StatCard
+              label="Шульте: лучшее время"
+              value={`5×5: ${s.schulte.best[5] === null ? '—' : formatDuration(s.schulte.best[5])}`}
+              hint={`7×7: ${s.schulte.best[7] === null ? '—' : formatDuration(s.schulte.best[7])} · занятий: ${c.schulte}`}
+            />
+          )}
+          {c.munsterberg > 0 && (
+            <StatCard
+              label="Мюнстерберг: лучший результат"
+              value={show(s.munsterberg.bestPercent, ' %')}
+              hint={`В среднем ${show(s.munsterberg.averagePercent, ' %')} найденных слов · тестов: ${c.munsterberg}`}
+            />
+          )}
+          {c.memory_words > 0 && (
+            <StatCard
+              label="Память на слова: лучший результат"
+              value={show(s.memory.bestPercent, ' %')}
+              hint={`В среднем ${show(s.memory.averagePercent, ' %')} вспомненных слов · раундов: ${c.memory_words}`}
+            />
+          )}
+          {c.mnemo_grid > 0 && (
+            <StatCard
+              label="Мнемотаблица: средняя точность"
+              value={`положение ${show(s.mnemo.averagePosition, ' %')}`}
+              hint={`цвет ${show(s.mnemo.averageColor, ' %')} · раундов: ${c.mnemo_grid}`}
+            />
+          )}
+          {c.alphabet_association > 0 && (
+            <StatCard
+              label="От А до Я: пройдено букв"
+              value={`${s.alphabet.letters} из 33`}
+              hint={`В среднем заполнено ${show(s.alphabet.averageFilled, '')} из 12 · раундов: ${c.alphabet_association}`}
+            />
+          )}
         </dl>
       </section>
 
@@ -82,8 +125,28 @@ export function ProgressPage({ sessions }: ProgressPageProps) {
         <h2 id="progress-history-title" className="section__title">
           История
         </h2>
+        {types.length > 1 && (
+          <label className="field history-filter">
+            <span className="field__label">Показать</span>
+            <select
+              className="field__select"
+              value={filter}
+              onChange={(event) => {
+                onFilter(event.target.value as Filter);
+                onLimit(PAGE_SIZE);
+              }}
+            >
+              <option value="all">Все тренировки ({s.totalSessions})</option>
+              {types.map((type) => (
+                <option key={type} value={type}>
+                  {TRAINING_LABELS[type]} ({c[type]})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <ul className="history">
-          {ordered.map((session) => (
+          {visible.map((session) => (
             <li key={session.id} className={`history__item history__item--${session.type}`}>
               <div className="history__main">
                 <span className="history__type">{sessionTypeLabel(session)}</span>
@@ -95,12 +158,17 @@ export function ProgressPage({ sessions }: ProgressPageProps) {
                 <span>
                   Длительность: <strong>{formatDuration(session.durationSeconds)}</strong>
                 </span>
-                <span>{describeResult(session)}</span>
+                <span>{describeSession(session)}</span>
               </div>
             </li>
           ))}
         </ul>
+        {ordered.length > limit && (
+          <button type="button" className="button" onClick={() => onLimit(limit + PAGE_SIZE)}>
+            Показать ещё ({ordered.length - limit})
+          </button>
+        )}
       </section>
-    </div>
+    </>
   );
 }

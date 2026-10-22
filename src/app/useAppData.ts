@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { mergeSessions } from '../lib/backup';
 import { loadSessions, loadSettings, saveSessions, saveSettings, type StorageIssue } from '../lib/storage';
 import type { Session, Settings } from '../types/session';
 
@@ -8,6 +9,8 @@ export type AppData = {
   settings: Settings;
   /** Добавляет завершённую сессию. Возвращает false, если сохранить в хранилище не удалось. */
   addSession: (session: Session) => boolean;
+  /** Добавляет записи из резервной копии без дублей. Возвращает число новых записей или null при ошибке записи. */
+  importSessions: (sessions: Session[], settings: Settings) => number | null;
   updateSettings: (patch: Partial<Settings>) => void;
 };
 
@@ -31,6 +34,19 @@ export function useAppData(): AppData {
     [sessions, storageIssue],
   );
 
+  const importSessions = useCallback(
+    (incoming: Session[], nextSettings: Settings): number | null => {
+      const { merged, added } = mergeSessions(sessions, incoming);
+      if (!saveSessions(merged)) return null;
+      setSessions(merged);
+      setSettings(nextSettings);
+      saveSettings(nextSettings);
+      if (storageIssue === 'corrupted') setStorageIssue('none');
+      return added;
+    },
+    [sessions, storageIssue],
+  );
+
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((current) => {
       const next = { ...current, ...patch };
@@ -39,5 +55,5 @@ export function useAppData(): AppData {
     });
   }, []);
 
-  return { sessions, storageIssue, settings, addSession, updateSettings };
+  return { sessions, storageIssue, settings, addSession, importSessions, updateSettings };
 }
