@@ -1,8 +1,8 @@
+import { RouteLink } from '../components/RouteLink';
 import { StatCard } from '../components/StatCard';
 import { sessionTypeLabel, sortNewestFirst, summarize } from '../features/progress/progressUtils';
 import { gridLabel, modeLabel } from '../features/schulte/schulteUtils';
 import { formatDateTime, formatDuration } from '../lib/dateUtils';
-import { routeHref } from '../lib/useHashRoute';
 import type { Session } from '../types/session';
 
 type ProgressPageProps = {
@@ -27,12 +27,12 @@ export function ProgressPage({ sessions }: ProgressPageProps) {
           <h2 className="card__title">История пока пуста</h2>
           <p className="muted">Завершите первую тренировку — её результат появится здесь.</p>
           <div className="actions">
-            <a className="button button--primary" href={routeHref('schulte')}>
+            <RouteLink className="button button--primary" to="schulte">
               Таблица Шульте
-            </a>
-            <a className="button button--primary" href={routeHref('reading')}>
+            </RouteLink>
+            <RouteLink className="button button--primary" to="reading">
               Чтение
-            </a>
+            </RouteLink>
           </div>
         </section>
       </div>

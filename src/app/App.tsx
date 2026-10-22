@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AppLayout } from '../components/AppLayout';
-import { useHashRoute } from '../lib/useHashRoute';
+import { NavigateContext, useHashRoute } from '../lib/useHashRoute';
 import { HomePage } from '../pages/HomePage';
 import { ProgressPage } from '../pages/ProgressPage';
 import { ReaderPage } from '../pages/ReaderPage';
@@ -15,7 +15,7 @@ const TITLES = {
 } as const;
 
 export function App() {
-  const route = useHashRoute();
+  const { route, navigate } = useHashRoute();
   const data = useAppData();
 
   useEffect(() => {
@@ -24,15 +24,17 @@ export function App() {
   }, [route]);
 
   return (
-    <AppLayout route={route} storageIssue={data.storageIssue}>
-      {route === 'home' && <HomePage sessions={data.sessions} />}
-      {route === 'schulte' && (
-        <SchultePage settings={data.settings} onSettingsChange={data.updateSettings} onComplete={data.addSession} />
-      )}
-      {route === 'reading' && (
-        <ReaderPage settings={data.settings} onSettingsChange={data.updateSettings} onComplete={data.addSession} />
-      )}
-      {route === 'progress' && <ProgressPage sessions={data.sessions} />}
-    </AppLayout>
+    <NavigateContext.Provider value={navigate}>
+      <AppLayout route={route} storageIssue={data.storageIssue}>
+        {route === 'home' && <HomePage sessions={data.sessions} />}
+        {route === 'schulte' && (
+          <SchultePage settings={data.settings} onSettingsChange={data.updateSettings} onComplete={data.addSession} />
+        )}
+        {route === 'reading' && (
+          <ReaderPage settings={data.settings} onSettingsChange={data.updateSettings} onComplete={data.addSession} />
+        )}
+        {route === 'progress' && <ProgressPage sessions={data.sessions} />}
+      </AppLayout>
+    </NavigateContext.Provider>
   );
 }

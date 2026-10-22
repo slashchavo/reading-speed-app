@@ -1,7 +1,7 @@
 import { StatCard } from '../components/StatCard';
 import { sessionTypeLabel, summarize } from '../features/progress/progressUtils';
 import { formatDateTime } from '../lib/dateUtils';
-import { routeHref } from '../lib/useHashRoute';
+import { RouteLink } from '../components/RouteLink';
 import type { Session } from '../types/session';
 
 type HomePageProps = {
@@ -23,22 +23,22 @@ export function HomePage({ sessions }: HomePageProps) {
       </header>
 
       <div className="cards">
-        <a className="card card--link" href={routeHref('schulte')}>
+        <RouteLink className="card card--link" to="schulte">
           <span className="card__icon" aria-hidden="true">
             ▦
           </span>
           <h2 className="card__title">Таблица Шульте</h2>
           <p className="muted">Найдите числа или буквы по порядку в таблице 5×5 или 7×7.</p>
           <span className="card__cta">Начать →</span>
-        </a>
-        <a className="card card--link" href={routeHref('reading')}>
+        </RouteLink>
+        <RouteLink className="card card--link" to="reading">
           <span className="card__icon" aria-hidden="true">
             ¶
           </span>
           <h2 className="card__title">Чтение</h2>
           <p className="muted">Прочитайте демонстрационный или свой текст и узнайте темп в словах в минуту.</p>
           <span className="card__cta">Начать →</span>
-        </a>
+        </RouteLink>
       </div>
 
       <section className="section" aria-labelledby="home-stats-title">
@@ -58,9 +58,9 @@ export function HomePage({ sessions }: HomePageProps) {
           />
         </dl>
         <p>
-          <a className="button" href={routeHref('progress')}>
+          <RouteLink className="button" to="progress">
             Смотреть историю и прогресс
-          </a>
+          </RouteLink>
         </p>
       </section>
     </div>

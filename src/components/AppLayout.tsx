@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import type { StorageIssue } from '../lib/storage';
-import { routeHref, type Route } from '../lib/useHashRoute';
+import type { Route } from '../lib/useHashRoute';
 import { Navigation } from './Navigation';
+import { RouteLink } from './RouteLink';
 
 type AppLayoutProps = {
   route: Route;
@@ -12,15 +13,23 @@ type AppLayoutProps = {
 export function AppLayout({ route, storageIssue, children }: AppLayoutProps) {
   return (
     <div className="layout">
-      <a className="skip-link" href="#main">
+      <a
+        className="skip-link"
+        href="#main"
+        onClick={(event) => {
+          // Переводим фокус вручную, не меняя адрес страницы.
+          event.preventDefault();
+          document.getElementById('main')?.focus();
+        }}
+      >
         Перейти к содержимому
       </a>
       <header className="header">
         <div className="header__inner">
-          <a className="brand" href={routeHref('home')}>
+          <RouteLink className="brand" to="home">
             <span className="brand__dot" aria-hidden="true" />
             Фокус
-          </a>
+          </RouteLink>
           <Navigation current={route} />
         </div>
       </header>

@@ -1,4 +1,5 @@
-import { routeHref, type Route } from '../lib/useHashRoute';
+import type { Route } from '../lib/useHashRoute';
+import { RouteLink } from './RouteLink';
 
 const ITEMS: { route: Route; label: string }[] = [
   { route: 'home', label: 'Главная' },
@@ -17,13 +18,9 @@ export function Navigation({ current }: NavigationProps) {
       <ul className="nav__list">
         {ITEMS.map((item) => (
           <li key={item.route}>
-            <a
-              className="nav__link"
-              href={routeHref(item.route)}
-              aria-current={item.route === current ? 'page' : undefined}
-            >
+            <RouteLink className="nav__link" to={item.route} current={item.route === current}>
               {item.label}
-            </a>
+            </RouteLink>
           </li>
         ))}
       </ul>
